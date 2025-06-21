@@ -1,34 +1,9 @@
-CC = gcc
-CURRENT = $(shell uname -r)
-KDIR = /lib/modules/$(CURRENT)/build
-PWD = $(shell pwd)
-DEST = /lib/modules/$(CURRENT)/misc
+# SPDX-License-Identifier: GPL-2.0
 
-TARGET = sblkdev_MM_3
+# Configuration and compile options for standalone module version in a separate
+# file. The upstream version should contains the configuration in the Kconfig
+# file, and should be free from all branches of conditional compilation.
+include ${M}/Makefile-standalone
 
-obj-m := $(TARGET).o
-
-all: default clean
-
-default:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules
-
-install:
-	cp -v $(TARGET).ko $(DEST)
-	/sbin/depmod -v | grep $(TARGET)
-	/sbin/insmod $(TARGET).ko
-	/sbin/lsmod | grep $(TARGET)
-
-uninstall:
-	/sbin/rmmod $(TARGET)
-	rm -v $(DEST)/$(TARGET).ko
-	/sbin/depmod
-
-clean:	
-	@rm -f *.o .*.cmd .*.flags *.mod.c *.order
-	@rm -f .*.*.cmd *.symvers *~ *.*~ .*.d
-	@rm -fR .tmp*
-	@rm -rf .tmp_versions
-
-disclean: clean
-	@rm -f *.ko
+sblkdev-y := device.o
+obj-$(CONFIG_SBLKDEV) += sblkdev.o

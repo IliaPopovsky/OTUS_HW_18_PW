@@ -1,0 +1,22 @@
+Модуль ядра Linux Simple Block Device
+
+Содержит минимум кода для создания самого примитивного блочного устройства.
+Функции:
+
+Совместимо с ядром Linux от 5.10 до 6.11.
+Позволяет создавать блочные устройства на основе биологии и запросов.
+Позволяет создавать несколько блочных устройств.
+
+Как использовать:
+
+Установить заголовки ядра и компилятор deb: apt install linux-haders gcc make или apt install dkms rpm: yum install kernel-headers
+
+Компилировать модуль cd ${HOME}/sblkdev; ./mk.sh build
+
+Установить в текущую систему cd ${HOME}/sblkdev; ./mk.sh install
+
+Загрузить модуль modprobe sblkdev catalog="sblkdev1,2048;sblkdev2,4096"
+
+Выгрузить modprobe -r sblkdev
+
+Удалить модуль cd ${HOME}/sblkdev; ./mk.sh uninstall
