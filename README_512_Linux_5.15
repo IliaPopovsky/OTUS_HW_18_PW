@@ -1,0 +1,297 @@
+ilia@ilia-VirtualBox:~/sblkdev4$ ./mk.sh build
+Making ...
+make: вход в каталог «/usr/src/linux-headers-5.15.0-107-generic»
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: gcc (Ubuntu 9.4.0-1ubuntu1~20.04.2) 9.4.0
+  You are using:           gcc (Ubuntu 11.4.0-1ubuntu1~22.04) 11.4.0
+  CC [M]  /home/ilia/sblkdev4/device.o
+/home/ilia/sblkdev4/device.c:577:9: note: ‘#pragma message: Request-based scheme selected.’
+  577 | #pragma message("Request-based scheme selected.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:587:9: note: ‘#pragma message: The struct bio have pointer to struct block_device.’
+  587 | #pragma message("The struct bio have pointer to struct block_device.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:593:9: note: ‘#pragma message: The blk_mq_alloc_disk() function was found.’
+  593 | #pragma message("The blk_mq_alloc_disk() function was found.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:596:9: note: ‘#pragma message: The function add_disk() has a return code.’
+  596 | #pragma message("The function add_disk() has a return code.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:602:9: note: ‘#pragma message: The function blk_cleanup_disk() was found.’
+  602 | #pragma message("The function blk_cleanup_disk() was found.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:605:9: note: ‘#pragma message: The header file 'genhd.h' was found.’
+  605 | #pragma message("The header file 'genhd.h' was found.")
+      |         ^~~~~~~
+  LD [M]  /home/ilia/sblkdev4/sblkdev.o
+  MODPOST /home/ilia/sblkdev4/Module.symvers
+  CC [M]  /home/ilia/sblkdev4/sblkdev.mod.o
+  LD [M]  /home/ilia/sblkdev4/sblkdev.ko
+  BTF [M] /home/ilia/sblkdev4/sblkdev.ko
+Skipping BTF generation for /home/ilia/sblkdev4/sblkdev.ko due to unavailability of vmlinux
+make: выход из каталога «/usr/src/linux-headers-5.15.0-107-generic»
+Completed.
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo insmod sblkdev.ko
+[sudo] пароль для ilia: 
+ilia@ilia-VirtualBox:~/sblkdev4$ echo $?
+0
+ilia@ilia-VirtualBox:~/sblkdev4$ ls -l /dev/sblk*
+brw-rw---- 1 root disk 252, 0 июн 21 20:34 /dev/sblkdev1
+brw-rw---- 1 root disk 252, 1 июн 21 20:34 /dev/sblkdev2
+brw-rw---- 1 root disk 252, 2 июн 21 20:34 /dev/sblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+ilia@ilia-VirtualBox:~/sblkdev4$ dmesg
+...
+...
+[15887.037198] exfat: Deprecated parameter 'namecase'
+[15887.048707] exFAT-fs (sdb1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck.
+[16362.070113] sblkdev: loading out-of-tree module taints kernel.
+[16362.070168] sblkdev: module verification failed: signature and/or required key missing - tainting kernel
+[16362.072925] sblkdev: add device 'sblkdev1' capacity 4096 sectors
+[16362.074229] sblkdev: Simple block device [252:0] was added
+[16362.074231] sblkdev: add device 'sblkdev2' capacity 8192 sectors
+[16362.077518] sblkdev: Simple block device [252:1] was added
+[16362.077523] sblkdev: add device 'sblkdev3' capacity 16384 sectors
+[16362.084010] sblkdev: Simple block device [252:2] was added
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fdisk -l /dev/sblkdev1
+[sudo] пароль для ilia: 
+Диск /dev/sblkdev1: 2 MiB, 2097152 байт, 4096 секторов
+Единицы: секторов по 1 * 512 = 512 байт
+Размер сектора (логический/физический): 512 байт / 512 байт
+Размер I/O (минимальный/оптимальный): 512 байт / 512 байт
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fdisk -l /dev/sblkdev2
+Диск /dev/sblkdev2: 4 MiB, 4194304 байт, 8192 секторов
+Единицы: секторов по 1 * 512 = 512 байт
+Размер сектора (логический/физический): 512 байт / 512 байт
+Размер I/O (минимальный/оптимальный): 512 байт / 512 байт
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fdisk -l /dev/sblkdev3
+Диск /dev/sblkdev3: 8 MiB, 8388608 байт, 16384 секторов
+Единицы: секторов по 1 * 512 = 512 байт
+Размер сектора (логический/физический): 512 байт / 512 байт
+Размер I/O (минимальный/оптимальный): 512 байт / 512 байт
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+lia@ilia-VirtualBox:~/sblkdev4$ sudo mkfs.vfat /dev/sblkdev1
+[sudo] пароль для ilia: 
+mkfs.fat 4.1 (2017-01-24)
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mkfs.ext2 /dev/sblkdev2
+mke2fs 1.45.5 (07-Jan-2020)
+Creating filesystem with 1024 4k blocks and 1024 inodes
+
+Allocating group tables: done                            
+Сохранение таблицы inod'ов: done                            
+Writing superblocks and filesystem accounting information: готово
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mkfs.ext3 /dev/sblkdev3
+mke2fs 1.45.5 (07-Jan-2020)
+Creating filesystem with 2048 4k blocks and 2048 inodes
+
+Allocating group tables: done                            
+Сохранение таблицы inod'ов: done                            
+Создание журнала (1024 блоков): готово
+Writing superblocks and filesystem accounting information: готово
+
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fsck /dev/sblkdev1
+[sudo] пароль для ilia: 
+fsck из util-linux 2.34
+fsck.fat 4.1 (2017-01-24)
+/dev/sblkdev1: 0 files, 0/1014 clusters
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fsck /dev/sblkdev2
+fsck из util-linux 2.34
+e2fsck 1.45.5 (07-Jan-2020)
+/dev/sblkdev2: clean, 11/1024 files, 42/1024 blocks
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fsck /dev/sblkdev3
+fsck из util-linux 2.34
+e2fsck 1.45.5 (07-Jan-2020)
+/dev/sblkdev3: clean, 11/2048 files, 1099/2048 blocks
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ ls /mnt
+archive  dsksblkdev1  dsksblkdev2  dsksblkdev3  nas  network  sdb
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount -tvfat /dev/sblkdev1 /mnt/dsksblkdev1
+[sudo] пароль для ilia: 
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount -text2 /dev/sblkdev2 /mnt/dsksblkdev2
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount -text3 /dev/sblkdev3 /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount | grep /sblk
+/dev/sblkdev1 on /mnt/dsksblkdev1 type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)
+/dev/sblkdev2 on /mnt/dsksblkdev2 type ext2 (rw,relatime)
+/dev/sblkdev3 on /mnt/dsksblkdev3 type ext3 (rw,relatime)
+ilia@ilia-VirtualBox:~/sblkdev4$ df | grep /sblk
+/dev/sblkdev1       2028            0     2028            0% /mnt/dsksblkdev1
+/dev/sblkdev2       3952           24     3724            1% /mnt/dsksblkdev2
+/dev/sblkdev3       3824           28     3388            1% /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo su
+[sudo] пароль для ilia: 
+root@ilia-VirtualBox:/home/ilia/sblkdev4# echo MY RECORD for 21.06.25 > /mnt/dsksblkdev1/file21_06_25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cat /mnt/dsksblkdev1/file21_06_25
+MY RECORD for 21.06.25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cp /mnt/dsksblkdev1/file21_06_25 /mnt/dsksblkdev2/file21__06__25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cp /mnt/dsksblkdev2/file21__06__25  /mnt/dsksblkdev2/file21___06___25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cp /mnt/dsksblkdev2/file21__06__25  /mnt/dsksblkdev3/file21___06___25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cat /mnt/dsksblkdev3/file21___06___25
+MY RECORD for 21.06.25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# df | grep /sblk
+/dev/sblkdev1       2028            2     2026            1% /mnt/dsksblkdev1
+/dev/sblkdev2       3952           32     3716            1% /mnt/dsksblkdev2
+/dev/sblkdev3       3824           32     3384            1% /mnt/dsksblkdev3
+root@ilia-VirtualBox:/home/ilia/sblkdev4# tree /mnt/dsk*
+/mnt/dsksblkdev1
+└── file21_06_25
+/mnt/dsksblkdev2
+├── file21___06___25
+├── file21__06__25
+└── lost+found
+/mnt/dsksblkdev3
+├── file21___06___25
+└── lost+found
+
+2 directories, 4 files
+root@ilia-VirtualBox:/home/ilia/sblkdev4#
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo cp /home/ilia/Daemon_STIVENS /mnt/dsksblkdev1 -R
+[sudo] пароль для ilia: 
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo cp /home/ilia/Daemon_STIVENS /mnt/dsksblkdev2 -R
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo cp /home/ilia/Daemon_STIVENS /mnt/dsksblkdev3 -R
+ilia@ilia-VirtualBox:~/sblkdev4$ tree /mnt/dsk*
+/mnt/dsksblkdev1
+├── Daemon_STIVENS
+│   ├── apue.h
+│   ├── bin
+│   │   └── Debug
+│   │       └── Daemon_STIVENS
+│   ├── Daemon_STIVENS.cbp
+│   ├── Daemon_STIVENS.depend
+│   ├── Daemon_STIVENS.layout
+│   ├── init_proc_daemon.c
+│   ├── main.c
+│   ├── obj
+│   │   └── Debug
+│   │       ├── init_proc_daemon.o
+│   │       ├── main.o
+│   │       └── only_one.o
+│   └── only_one.c
+└── file21_06_25
+/mnt/dsksblkdev2
+├── Daemon_STIVENS
+│   ├── apue.h
+│   ├── bin
+│   │   └── Debug
+│   │       └── Daemon_STIVENS
+│   ├── Daemon_STIVENS.cbp
+│   ├── Daemon_STIVENS.depend
+│   ├── Daemon_STIVENS.layout
+│   ├── init_proc_daemon.c
+│   ├── main.c
+│   ├── obj
+│   │   └── Debug
+│   │       ├── init_proc_daemon.o
+│   │       ├── main.o
+│   │       └── only_one.o
+│   └── only_one.c
+├── file21___06___25
+├── file21__06__25
+└── lost+found [error opening dir]
+/mnt/dsksblkdev3
+├── Daemon_STIVENS
+│   ├── apue.h
+│   ├── bin
+│   │   └── Debug
+│   │       └── Daemon_STIVENS
+│   ├── Daemon_STIVENS.cbp
+│   ├── Daemon_STIVENS.depend
+│   ├── Daemon_STIVENS.layout
+│   ├── init_proc_daemon.c
+│   ├── main.c
+│   ├── obj
+│   │   └── Debug
+│   │       ├── init_proc_daemon.o
+│   │       ├── main.o
+│   │       └── only_one.o
+│   └── only_one.c
+├── file21___06___25
+└── lost+found [error opening dir]
+
+17 directories, 37 files
+ilia@ilia-VirtualBox:~/sblkdev4$ df | grep /sblk
+/dev/sblkdev1       2028           84     1944            5% /mnt/dsksblkdev1
+/dev/sblkdev2       3952          140     3608            4% /mnt/dsksblkdev2
+/dev/sblkdev3       3824          140     3276            5% /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+sblkdev                20480  3
+exfat                  86016  1
+xt_conntrack           16384  1
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo rmmod sblkdev
+[sudo] пароль для ilia: 
+rmmod: ERROR: Module sblkdev is in use
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev1
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+sblkdev                20480  2
+exfat                  86016  1
+xt_conntrack           16384  1
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev1
+umount: /mnt/dsksblkdev1: not mounted.
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev2
+ilia@ilia-VirtualBox:~/sblkdev4$ ^C
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev1
+umount: /mnt/dsksblkdev1: not mounted.
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+sblkdev                20480  0
+exfat                  86016  1
+xt_conntrack           16384  1
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo rmmod sblkdev
+ilia@ilia-VirtualBox:~/sblkdev4$ echo $?
+0
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ dmesg
+...
+...
+15887.037198] exfat: Deprecated parameter 'namecase'
+[15887.048707] exFAT-fs (sdb1): Volume was not properly unmounted. Some data may be corrupt. Please run fsck.
+[16362.070113] sblkdev: loading out-of-tree module taints kernel.
+[16362.070168] sblkdev: module verification failed: signature and/or required key missing - tainting kernel
+[16362.072925] sblkdev: add device 'sblkdev1' capacity 4096 sectors
+[16362.074229] sblkdev: Simple block device [252:0] was added
+[16362.074231] sblkdev: add device 'sblkdev2' capacity 8192 sectors
+[16362.077518] sblkdev: Simple block device [252:1] was added
+[16362.077523] sblkdev: add device 'sblkdev3' capacity 16384 sectors
+[16362.084010] sblkdev: Simple block device [252:2] was added
+[19845.971536] EXT4-fs (sblkdev2): mounting ext2 file system using the ext4 subsystem
+[19845.973951] EXT4-fs (sblkdev2): mounted filesystem without journal. Opts: (null). Quota mode: none.
+[19845.973997] ext2 filesystem being mounted at /mnt/dsksblkdev2 supports timestamps until 2038 (0x7fffffff)
+[19865.424515] EXT4-fs (sblkdev3): mounting ext3 file system using the ext4 subsystem
+[19865.434256] EXT4-fs (sblkdev3): mounted filesystem with ordered data mode. Opts: (null). Quota mode: none.
+[19865.434273] ext3 filesystem being mounted at /mnt/dsksblkdev3 supports timestamps until 2038 (0x7fffffff)
+[20134.530775] [drm:vmw_msg_ioctl [vmwgfx]] *ERROR* Failed to open channel.
+[20134.530873] [drm:vmw_msg_ioctl [vmwgfx]] *ERROR* Failed to open channel.
+[20523.933244] [drm] vmwgfx: mob memory overflow. Consider increasing guest RAM and graphicsMemory.
+[20523.933300] [drm:vmw_host_printf [vmwgfx]] *ERROR* Failed to send host log message.
+[20523.933806] [drm] vmwgfx: increasing guest mob limits to 524288 kB.
+[20724.548786] sblkdev: simple block device was removed
+[20724.580599] sblkdev: simple block device was removed
+[20724.609139] sblkdev: simple block device was removed
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+

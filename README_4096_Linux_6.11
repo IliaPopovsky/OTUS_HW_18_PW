@@ -1,0 +1,262 @@
+ilia@ilia-VirtualBox:~/sblkdev4$ ./mk.sh build
+Making ...
+make: вход в каталог «/usr/src/linux-headers-6.11.0-26-generic»
+warning: the compiler differs from the one used to build the kernel
+  The kernel was built by: x86_64-linux-gnu-gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+  You are using:           gcc-13 (Ubuntu 13.3.0-6ubuntu2~24.04) 13.3.0
+  CC [M]  /home/ilia/sblkdev4/device.o
+/home/ilia/sblkdev4/device.c:577:9: note: ‘#pragma message: Request-based scheme selected.’
+  577 | #pragma message("Request-based scheme selected.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:583:9: note: ‘#pragma message: Specific block size selected.’
+  583 | #pragma message("Specific block size selected.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:587:9: note: ‘#pragma message: The struct bio have pointer to struct block_device.’
+  587 | #pragma message("The struct bio have pointer to struct block_device.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:593:9: note: ‘#pragma message: The blk_mq_alloc_disk() function was found.’
+  593 | #pragma message("The blk_mq_alloc_disk() function was found.")
+      |         ^~~~~~~
+/home/ilia/sblkdev4/device.c:596:9: note: ‘#pragma message: The function add_disk() has a return code.’
+  596 | #pragma message("The function add_disk() has a return code.")
+      |         ^~~~~~~
+  LD [M]  /home/ilia/sblkdev4/sblkdev.o
+  MODPOST /home/ilia/sblkdev4/Module.symvers
+  CC [M]  /home/ilia/sblkdev4/sblkdev.mod.o
+  LD [M]  /home/ilia/sblkdev4/sblkdev.ko
+  BTF [M] /home/ilia/sblkdev4/sblkdev.ko
+Skipping BTF generation for /home/ilia/sblkdev4/sblkdev.ko due to unavailability of vmlinux
+make: выход из каталога «/usr/src/linux-headers-6.11.0-26-generic»
+Completed.
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo insmod sblkdev.ko
+[sudo] пароль для ilia: 
+ilia@ilia-VirtualBox:~/sblkdev4$ ls -l /dev/sblk*
+brw-rw---- 1 root disk 251, 0 июн 21 16:36 /dev/sblkdev1
+brw-rw---- 1 root disk 251, 1 июн 21 16:36 /dev/sblkdev2
+brw-rw---- 1 root disk 251, 2 июн 21 16:36 /dev/sblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo dmesg | tail -n12
+[  491.636391] [drm:vmw_msg_ioctl [vmwgfx]] *ERROR* Failed to open channel.
+[ 1237.116647] workqueue: e1000_watchdog [e1000] hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+[ 1495.956410] sblkdev: loading out-of-tree module taints kernel.
+[ 1495.956416] sblkdev: module verification failed: signature and/or required key missing - tainting kernel
+[ 1495.958457] sblkdev: add device 'sblkdev1' capacity 4096 sectors
+[ 1495.961175] sblkdev: Simple block device [251:0] was added
+[ 1495.961178] sblkdev: add device 'sblkdev2' capacity 8192 sectors
+[ 1495.964264] sblkdev: Simple block device [251:1] was added
+[ 1495.964268] sblkdev: add device 'sblkdev3' capacity 16384 sectors
+[ 1495.974653] sblkdev: Simple block device [251:2] was added
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo hdparm -t /dev/sblkdev1
+
+/dev/sblkdev1:
+ Timing buffered disk reads:   2 MB in  0.01 seconds = 278.44 MB/sec
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo hdparm -t /dev/sblkdev2
+
+/dev/sblkdev2:
+ Timing buffered disk reads:   4 MB in  0.02 seconds = 228.77 MB/sec
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo hdparm -t /dev/sblkdev3
+
+/dev/sblkdev3:
+ Timing buffered disk reads:   8 MB in  0.04 seconds = 203.87 MB/sec
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fdisk -l /dev/sblkdev1
+Диск /dev/sblkdev1: 2 MiB, 2097152 байт, 512 секторов
+Единицы: секторов по 1 * 4096 = 4096 байт
+Размер сектора (логический/физический): 4096 байт / 4096 байт
+Размер I/O (минимальный/оптимальный): 4096 байт / 4096 байт
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fdisk -l /dev/sblkdev2
+Диск /dev/sblkdev2: 4 MiB, 4194304 байт, 1024 секторов
+Единицы: секторов по 1 * 4096 = 4096 байт
+Размер сектора (логический/физический): 4096 байт / 4096 байт
+Размер I/O (минимальный/оптимальный): 4096 байт / 4096 байт
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fdisk -l /dev/sblkdev3
+Диск /dev/sblkdev3: 8 MiB, 8388608 байт, 2048 секторов
+Единицы: секторов по 1 * 4096 = 4096 байт
+Размер сектора (логический/физический): 4096 байт / 4096 байт
+Размер I/O (минимальный/оптимальный): 4096 байт / 4096 байт
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mkfs.vfat /dev/sblkdev1
+[sudo] пароль для ilia: 
+mkfs.fat 4.2 (2021-01-31)
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mkfs.vfat /dev/sblkdev2
+mkfs.fat 4.2 (2021-01-31)
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mkfs.vfat /dev/sblkdev3
+mkfs.fat 4.2 (2021-01-31)
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fsck /dev/sblkdev1
+[sudo] пароль для ilia: 
+fsck из util-linux 2.39.3
+fsck.fat 4.2 (2021-01-31)
+/dev/sblkdev1: 0 files, 0/126 clusters
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fsck /dev/sblkdev2
+fsck из util-linux 2.39.3
+fsck.fat 4.2 (2021-01-31)
+/dev/sblkdev2: 0 files, 0/254 clusters
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo fsck /dev/sblkdev3
+fsck из util-linux 2.39.3
+fsck.fat 4.2 (2021-01-31)
+/dev/sblkdev3: 0 files, 0/510 clusters
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ ls /mnt
+dsksblkdev1  dsksblkdev2  dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount -tvfat /dev/sblkdev1 /mnt/dsksblkdev1
+[sudo] пароль для ilia: 
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount -tvfat /dev/sblkdev2 /mnt/dsksblkdev2
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount -tvfat /dev/sblkdev3 /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo mount | grep /sblk
+/dev/sblkdev1 on /mnt/dsksblkdev1 type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)
+/dev/sblkdev2 on /mnt/dsksblkdev2 type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)
+/dev/sblkdev3 on /mnt/dsksblkdev3 type vfat (rw,relatime,fmask=0022,dmask=0022,codepage=437,iocharset=iso8859-1,shortname=mixed,errors=remount-ro)
+ilia@ilia-VirtualBox:~/sblkdev4$ df | grep /sblk
+/dev/sblkdev1       2016            0     2016            0% /mnt/dsksblkdev1
+/dev/sblkdev2       4064            0     4064            0% /mnt/dsksblkdev2
+/dev/sblkdev3       8160            0     8160            0% /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo su
+[sudo] пароль для ilia: 
+root@ilia-VirtualBox:/home/ilia/sblkdev4# echo My record for 21.06.25 > /mnt/dsksblkdev1/file210625
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cat /mnt/dsksblkdev1/file210625
+My record for 21.06.25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cp /mnt/dsksblkdev1/file210625  /mnt/dsksblkdev2/file21_06_25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cp /mnt/dsksblkdev2/file21_06_25  /mnt/dsksblkdev3/file21__06__25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# cat /mnt/dsksblkdev3/file21__06__25
+My record for 21.06.25
+root@ilia-VirtualBox:/home/ilia/sblkdev4# tree /mnt
+/mnt
+├── dsksblkdev1
+│   └── file210625
+├── dsksblkdev2
+│   └── file21_06_25
+└── dsksblkdev3
+    └── file21__06__25
+
+4 directories, 3 files
+root@ilia-VirtualBox:/home/ilia/sblkdev4# df | grep /sblk
+/dev/sblkdev1       2016           16     2000            1% /mnt/dsksblkdev1
+/dev/sblkdev2       4064           16     4048            1% /mnt/dsksblkdev2
+/dev/sblkdev3       8160           16     8144            1% /mnt/dsksblkdev3
+root@ilia-VirtualBox:/home/ilia/sblkdev4#
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo cp /home/ilia/bdev_block_mod.ELDD_14 /mnt/dsksblkdev1 -R
+[sudo] пароль для ilia: 
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo cp /home/ilia/bdev_block_mod.ELDD_14 /mnt/dsksblkdev2 -R
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo cp /home/ilia/bdev_block_mod.ELDD_14 /mnt/dsksblkdev3 -R
+ilia@ilia-VirtualBox:~/sblkdev4$ tree /mnt
+/mnt
+├── dsksblkdev1
+│   ├── bdev_block_mod.ELDD_14
+│   │   ├── block_mod_e.c
+│   │   ├── block_mod_e.fc15.hist
+│   │   ├── block_mod_orig.tgz
+│   │   ├── common.c
+│   │   ├── common.h
+│   │   ├── ioctl.c
+│   │   ├── Makefile
+│   │   └── request.c
+│   └── file210625
+├── dsksblkdev2
+│   ├── bdev_block_mod.ELDD_14
+│   │   ├── block_mod_e.c
+│   │   ├── block_mod_e.fc15.hist
+│   │   ├── block_mod_orig.tgz
+│   │   ├── common.c
+│   │   ├── common.h
+│   │   ├── ioctl.c
+│   │   ├── Makefile
+│   │   └── request.c
+│   └── file21_06_25
+└── dsksblkdev3
+    ├── bdev_block_mod.ELDD_14
+    │   ├── block_mod_e.c
+    │   ├── block_mod_e.fc15.hist
+    │   ├── block_mod_orig.tgz
+    │   ├── common.c
+    │   ├── common.h
+    │   ├── ioctl.c
+    │   ├── Makefile
+    │   └── request.c
+    └── file21__06__25
+
+7 directories, 27 files
+ilia@ilia-VirtualBox:~/sblkdev4$ df | grep /sblk
+/dev/sblkdev1       2016          192     1824           10% /mnt/dsksblkdev1
+/dev/sblkdev2       4064          192     3872            5% /mnt/dsksblkdev2
+/dev/sblkdev3       8160          192     7968            3% /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+nls_iso8859_1          12288  3
+sblkdev                16384  3
+snd_seq_dummy          12288  0
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo rmmod sblkdev
+[sudo] пароль для ilia: 
+rmmod: ERROR: Module sblkdev is in use
+ilia@ilia-VirtualBox:~/sblkdev4$ 
+
+Число счетчика ссылок на модуль не нулевое! ... естественно, до тех пор, пока мы не размонтируем все используемые диски этого модуля:
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev1
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+nls_iso8859_1          12288  2
+sblkdev                16384  2
+snd_seq_dummy          12288  0
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev2
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+nls_iso8859_1          12288  1
+sblkdev                16384  1
+snd_seq_dummy          12288  0
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo umount /mnt/dsksblkdev3
+ilia@ilia-VirtualBox:~/sblkdev4$ lsmod | head -n4
+Module                  Size  Used by
+nls_iso8859_1          12288  0
+sblkdev                16384  0
+snd_seq_dummy          12288  0
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo rmmod sblkdev
+ilia@ilia-VirtualBox:~/sblkdev4$ echo $?
+0
+ilia@ilia-VirtualBox:~/sblkdev4$
+
+ilia@ilia-VirtualBox:~/sblkdev4$ sudo dmesg | tail -n20
+[  491.636189] [drm:vmw_msg_ioctl [vmwgfx]] *ERROR* Failed to open channel.
+[  491.636391] [drm:vmw_msg_ioctl [vmwgfx]] *ERROR* Failed to open channel.
+[ 1237.116647] workqueue: e1000_watchdog [e1000] hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+[ 1495.956410] sblkdev: loading out-of-tree module taints kernel.
+[ 1495.956416] sblkdev: module verification failed: signature and/or required key missing - tainting kernel
+[ 1495.958457] sblkdev: add device 'sblkdev1' capacity 4096 sectors
+[ 1495.961175] sblkdev: Simple block device [251:0] was added
+[ 1495.961178] sblkdev: add device 'sblkdev2' capacity 8192 sectors
+[ 1495.964264] sblkdev: Simple block device [251:1] was added
+[ 1495.964268] sblkdev: add device 'sblkdev3' capacity 16384 sectors
+[ 1495.974653] sblkdev: Simple block device [251:2] was added
+[ 1641.628569] workqueue: e1000_watchdog [e1000] hogged CPU for >10000us 5 times, consider switching to WQ_UNBOUND
+[ 1940.999513] workqueue: e1000_watchdog [e1000] hogged CPU for >10000us 7 times, consider switching to WQ_UNBOUND
+[ 2061.479776] workqueue: blk_mq_run_work_fn hogged CPU for >10000us 11 times, consider switching to WQ_UNBOUND
+[ 3645.806818] workqueue: vmstat_shepherd hogged CPU for >10000us 4 times, consider switching to WQ_UNBOUND
+[ 4071.675423] workqueue: vmstat_shepherd hogged CPU for >10000us 5 times, consider switching to WQ_UNBOUND
+[ 4101.195334] workqueue: e1000_watchdog [e1000] hogged CPU for >10000us 11 times, consider switching to WQ_UNBOUND
+[ 4439.841192] sblkdev: simple block device was removed
+[ 4439.859159] sblkdev: simple block device was removed
+[ 4439.871015] sblkdev: simple block device was removed
+ilia@ilia-VirtualBox:~/sblkdev4$
