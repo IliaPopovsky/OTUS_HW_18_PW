@@ -82,7 +82,24 @@ static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_qu
 
 	//might_sleep();
 	cant_sleep(); /* cannot use any locks that make the thread sleep */
-
+	
+	
+        /**
+ 	* blk_mq_start_request - Start processing a request
+ 	* @rq: Pointer to request to be started
+ 	*
+ 	* Function used by device drivers to notify the block layer that a request
+ 	* is going to be processed now, so blk layer can do proper initializations
+ 	* such as starting the timeout timer.
+	 */
+	 /**
+	* blk_mq_start_request - Начать обработку запроса
+	* @rq: Указатель на запрос для запуска
+	*
+	* Функция, используемая драйверами устройств для уведомления уровня блоков о том, что запрос
+	* будет обработан сейчас, чтобы уровень blk мог выполнить правильную инициализацию
+	* например, запустить таймер тайм-аута.
+	*/
 	blk_mq_start_request(rq);
 
 	if (process_request(rq, &nr_bytes))
