@@ -52,6 +52,12 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 	struct bio_vec bvec;
 	struct req_iterator iter;
 	struct sblkdev_device *dev = rq->q->queuedata;
+	/*
+         * blk_rq_pos()			: the current sector
+         */
+        /*
+	 * blk_rq_pos() : текущий сектор
+	 */
 	loff_t pos = blk_rq_pos(rq) << SECTOR_SHIFT;
 	loff_t dev_size = (dev->capacity << SECTOR_SHIFT);
 
@@ -82,6 +88,7 @@ static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_qu
 
 	//might_sleep();
 	cant_sleep(); /* cannot use any locks that make the thread sleep */
+	/* нельзя использовать блокировки, которые заставляют поток спать */
 	
 	
         /**
@@ -92,7 +99,7 @@ static blk_status_t _queue_rq(struct blk_mq_hw_ctx *hctx, const struct blk_mq_qu
  	* is going to be processed now, so blk layer can do proper initializations
  	* such as starting the timeout timer.
 	 */
-	 /**
+	/**
 	* blk_mq_start_request - Начать обработку запроса
 	* @rq: Указатель на запрос для запуска
 	*
