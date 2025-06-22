@@ -1,0 +1,83 @@
+int (*open) (struct block_device *, fmode_t);  https://elixir.bootlin.com/linux/v6.0/source/include/linux/blkdev.h#L1384
+int (*open) (struct block_device *, fmode_t);  https://elixir.bootlin.com/linux/v5.0/source/include/linux/blkdev.h#L1640
+int (*open) (struct block_device *, fmode_t);  https://elixir.bootlin.com/linux/v6.4.16/source/include/linux/blkdev.h#L1381
+
+int (*open)(struct gendisk *disk, blk_mode_t mode); https://elixir.bootlin.com/linux/v6.5/source/include/linux/blkdev.h#L1373
+int (*open)(struct gendisk *disk, blk_mode_t mode); https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1470
+
+-----------------------------------------------
+void (*release) (struct gendisk *, fmode_t);   https://elixir.bootlin.com/linux/v5.0/source/include/linux/blkdev.h#L1640
+void (*release) (struct gendisk *, fmode_t);   https://elixir.bootlin.com/linux/v6.0.19/source/include/linux/blkdev.h#L1384
+void (*release) (struct gendisk *, fmode_t);   https://elixir.bootlin.com/linux/v6.4.16/source/include/linux/blkdev.h#L1381
+
+void (*release)(struct gendisk *disk);         https://elixir.bootlin.com/linux/v6.5/source/include/linux/blkdev.h#L1373
+void (*release)(struct gendisk *disk);         https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1470
+
+-----------------------------------------------
+#define blk_alloc_disk(node_id)	               https://elixir.bootlin.com/linux/v5.14/source/include/linux/genhd.h#L292     DEBUT
+#define blk_alloc_disk(node_id)                https://elixir.bootlin.com/linux/v6.8.12/source/include/linux/blkdev.h#L792
+
+#define blk_alloc_disk(lim, node_id)           https://elixir.bootlin.com/linux/v6.9/source/include/linux/blkdev.h#L787
+#define blk_alloc_disk(lim, node_id)           https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L821
+
+-----------------------------------------------
+void blk_queue_physical_block_size(struct request_queue *q, unsigned int size)   https://elixir.bootlin.com/linux/v5.0/source/block/blk-settings.c#L348
+void blk_queue_physical_block_size(struct request_queue *q, unsigned int size)   https://elixir.bootlin.com/linux/v5.19.17/source/block/blk-settings.c#L332
+void blk_queue_physical_block_size(struct request_queue *q, unsigned int size)   https://elixir.bootlin.com/linux/v6.0.19/source/block/blk-settings.c#L332
+void blk_queue_physical_block_size(struct request_queue *q, unsigned int size)   https://elixir.bootlin.com/linux/v6.10.14/source/block/blk-settings.c#L425   FINAL
+
+-----------------------------------------------
+static inline unsigned int queue_physical_block_size(struct request_queue *q)         https://elixir.bootlin.com/linux/v2.6.31/source/include/linux/blkdev.h#L1054   DEBUT
+static inline unsigned int queue_physical_block_size(const struct request_queue *q)   https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1236
+
+-----------------------------------------------
+void blk_queue_logical_block_size(struct request_queue *q, unsigned short size)  https://elixir.bootlin.com/linux/v5.0/source/block/blk-settings.c#L326
+void blk_queue_logical_block_size(struct request_queue *q, unsigned short size)  https://elixir.bootlin.com/linux/v5.4.13/source/block/blk-settings.c#L331
+
+void blk_queue_logical_block_size(struct request_queue *q, unsigned int size)    https://elixir.bootlin.com/linux/v5.4.14/source/block/blk-settings.c#L331  PART-DEBUT
+void blk_queue_logical_block_size(struct request_queue *q, unsigned int size)    https://elixir.bootlin.com/linux/v6.10.14/source/block/blk-settings.c#L393  FINAL
+
+-----------------------------------------------
+static inline unsigned short queue_logical_block_size(struct request_queue *q)       https://elixir.bootlin.com/linux/v2.6.31/source/include/linux/blkdev.h#L1039  DEBUT
+static inline unsigned short queue_logical_block_size(const struct request_queue *q) https://elixir.bootlin.com/linux/v5.4.13/source/include/linux/blkdev.h#L1297  PART-DEBUT
+
+static inline unsigned queue_logical_block_size(const struct request_queue *q)       https://elixir.bootlin.com/linux/v5.4.14/source/include/linux/blkdev.h#L1297
+static inline unsigned queue_logical_block_size(const struct request_queue *q)       https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1226
+
+-----------------------------------------------
+void blk_queue_max_hw_sectors(struct request_queue *q, unsigned int max_hw_sectors)  https://elixir.bootlin.com/linux/v5.0/source/block/blk-settings.c#L181
+void blk_queue_max_hw_sectors(struct request_queue *q, unsigned int max_hw_sectors)  https://elixir.bootlin.com/linux/v6.9.12/source/block/blk-settings.c#L324  FINAL
+
+-----------------------------------------------
+static inline unsigned int queue_max_hw_sectors(struct request_queue *q)             https://elixir.bootlin.com/linux/v5.0/source/include/linux/blkdev.h#L1236
+static inline unsigned int queue_max_hw_sectors(const struct request_queue *q)       https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1170
+
+-----------------------------------------------
+#define blk_mq_alloc_disk(set, queuedata)                                            https://elixir.bootlin.com/linux/v5.14/source/include/linux/blk-mq.h#L429   DEBUT
+#define blk_mq_alloc_disk(set, queuedata)                                            https://elixir.bootlin.com/linux/v6.8.12/source/include/linux/blk-mq.h#L687
+
+#define blk_mq_alloc_disk(set, lim, queuedata)	                                     https://elixir.bootlin.com/linux/v6.9/source/include/linux/blk-mq.h#L690
+#define blk_mq_alloc_disk(set, lim, queuedata)                                       https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L719
+
+-----------------------------------------------
+void blk_set_stacking_limits(struct queue_limits *lim)                               https://elixir.bootlin.com/linux/v3.3/source/block/blk-settings.c#L138       DEBUT
+void blk_set_stacking_limits(struct queue_limits *lim)                               https://elixir.bootlin.com/linux/v5.0/source/block/blk-settings.c#L71
+void blk_set_stacking_limits(struct queue_limits *lim)                               https://elixir.bootlin.com/linux/v6.11/source/block/blk-settings.c#L35
+
+-----------------------------------------------
+void blk_queue_io_min(struct request_queue *q, unsigned int min)                     https://elixir.bootlin.com/linux/v2.6.31/source/block/blk-settings.c#L424    DEBUT
+void blk_queue_io_min(struct request_queue *q, unsigned int min)                     https://elixir.bootlin.com/linux/v6.10.14/source/block/blk-settings.c#L524   FINAL
+
+-----------------------------------------------
+void blk_queue_io_opt(struct request_queue *q, unsigned int opt)                     https://elixir.bootlin.com/linux/v2.6.31/source/block/blk-settings.c#L443    DEBUT
+void blk_queue_io_opt(struct request_queue *q, unsigned int opt)                     https://elixir.bootlin.com/linux/v6.9.12/source/block/blk-settings.c#L679    FINAL
+
+
+
+
+
+
+   
+
+
+
