@@ -634,7 +634,7 @@ fail:
  * The configuration of block devices is implemented in the simplest way:
  * using the module parameter, which is passed when the module is loaded.
  * Example:
- *    modprobe sblkdev catalog="sblkdev1,2048;sblkdev2,4096"
+ *    modprobe sblkdev catalog="sblkdev1,4096;sblkdev2,8192;sblkdev3,16384"
  */
 
 static int sblkdev_major;
