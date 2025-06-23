@@ -171,7 +171,7 @@ void _submit_bio(struct bio *bio)
 #endif
 
 	might_sleep();
-	//cant_sleep(); /* cannot use any locks that make the thread sleep */
+	//cant_sleep(); /* cannot use any locks that make the thread sleep */  /* нельзя использовать блокировки, которые заставляют поток спать */
 
 	process_bio(dev, bio);
 
@@ -271,7 +271,8 @@ static int _ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, uns
 static int _compat_ioctl(struct block_device *bdev, fmode_t mode, unsigned int cmd, unsigned long arg)
 {
 	// CONFIG_COMPAT is to allow running 32-bit userspace code on a 64-bit kernel
-	return -ENOTTY; // not supported
+	// CONFIG_COMPAT — разрешить запуск 32-битного кода пользовательского пространства на 64-битном ядре
+	return -ENOTTY; // not supported  // не поддерживается
 }
 #endif
 
