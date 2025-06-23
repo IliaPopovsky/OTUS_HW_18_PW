@@ -26,5 +26,12 @@
 Вообще-то любое блочное устройство в UNIX (и в Linux, в частности) представляется как последовательность байтов (raw, сырое представление) — например:
 /dev/sda. Именно такое представление и должен обеспечить модуль-драйвер блочного устройства.
 
+Позже на последовательность байтов, созданную драйвером блочного устройства, может быть наложена структура разделов (partition) в формате MBR (Master Boot Record) — программой fdisk или в новом, идущем ему на смену формате GPT (GUID Partition Table) — программами parted, gparted, gdisk). Далее на сам диск или любой его раздел может быть наложена структура любой из многих файловых систем, поддерживаемых Linux, что делается программами:
+$ ls -w80 /sbin/mkfs*
+/sbin/mkfs /sbin/mkfs.ext3 /sbin/mkfs.gfs2 /sbin/mkfs.ntfs
+/sbin/mkfs.btrfs /sbin/mkfs.ext4 /sbin/mkfs.hfsplus /sbin/mkfs.reiserfs
+/sbin/mkfs.cramfs /sbin/mkfs.ext4dev /sbin/mkfs.minix /sbin/mkfs.vfat
+/sbin/mkfs.ext2 /sbin/mkfs.fat /sbin/mkfs.msdos /sbin/mkfs.xfs 
+
 
 
