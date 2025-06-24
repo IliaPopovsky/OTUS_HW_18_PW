@@ -63,7 +63,7 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
 
 	rq_for_each_segment(bvec, rq, iter) {
 		unsigned long len = bvec.bv_len;
-		void *buf = page_address(bvec.bv_page) + bvec.bv_offset;
+		void *buf = page_address(bvec.bv_page) + bvec.bv_offset;         /* allocate a buffer to store data */ /* аллоцируем буфер для хранения данных */
 
 		if ((pos + len) > dev_size)
 			len = (unsigned long)(dev_size - pos);
@@ -136,7 +136,7 @@ static inline void process_bio(struct sblkdev_device *dev, struct bio *bio)
 	start_time = bio_start_io_acct(bio);
 	bio_for_each_segment(bvec, bio, iter) {
 		unsigned int len = bvec.bv_len;
-		void *buf = page_address(bvec.bv_page) + bvec.bv_offset;
+		void *buf = page_address(bvec.bv_page) + bvec.bv_offset;            /* allocate a buffer to store data */ /* аллоцируем буфер для хранения данных */
 
 		if ((pos + len) > dev_size) {
 			/* len = (unsigned long)(dev_size - pos);*/
