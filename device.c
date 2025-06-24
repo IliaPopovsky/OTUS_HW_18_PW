@@ -292,6 +292,9 @@ static const struct block_device_operations fops = {
 /*
  * sblkdev_remove() - Remove simple block device
  */
+/*
+* sblkdev_remove() - Удалить простое блочное устройство
+*/
 void sblkdev_remove(struct sblkdev_device *dev)
 {
 	del_gendisk(dev->disk);
@@ -636,6 +639,13 @@ fail:
  * Example:
  *    modprobe sblkdev catalog="sblkdev1,4096;sblkdev2,8192;sblkdev3,16384"
  */
+/*
+* Модуль может создавать более одного блочного устройства.
+* Конфигурация блочных устройств реализована простейшим способом:
+* с использованием параметра модуля, который передается при загрузке модуля.
+* Пример:
+* modprobe sblkdev catalog="sblkdev1,4096;sblkdev2,8192;sblkdev3,16384"
+*/
 
 static int sblkdev_major;
 static LIST_HEAD(sblkdev_device_list);
@@ -644,10 +654,15 @@ static char *sblkdev_catalog = "sblkdev1,4096;sblkdev2,8192;sblkdev3,16384";
 /*
  * sblkdev_init() - Entry point 'init'.
  *
- * Executed when the module is loaded. Parses the catalog parameter and
- * creates block devices.
+ * Executed when the module is loaded. Parses the catalog parameter and creates block devices.
  */
-static int __init sblkdev_init(void)
+/*
+* sblkdev_init() - Точка входа 'init'.
+*
+* Выполняется при загрузке модуля. Анализирует параметр каталога и создает блочные устройства.
+*/
+
+static int __init sblkdev_init(void)                                      
 {
 	int ret = 0;
 	int inx = 0;
