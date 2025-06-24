@@ -674,7 +674,7 @@ static int __init sblkdev_init(void)
 	char *token;
 	size_t length;
 
-	sblkdev_major = register_blkdev(sblkdev_major, KBUILD_MODNAME);
+	sblkdev_major = register_blkdev(sblkdev_major, KBUILD_MODNAME);             // Функция register_blkdev() регистрирует блочное устройство. Ему выделяется major номер.
 	if (sblkdev_major <= 0) {
 		pr_info("Unable to get major number\n");
 		return -EBUSY;
@@ -727,7 +727,7 @@ static int __init sblkdev_init(void)
 		return 0;
 
 fail_unregister:
-	unregister_blkdev(sblkdev_major, KBUILD_MODNAME);
+	unregister_blkdev(sblkdev_major, KBUILD_MODNAME);                         // unregister_blkdev() — освобождает major номер.
 	return ret;
 }
 
@@ -753,7 +753,7 @@ static void __exit sblkdev_exit(void)
 	}
 
 	if (sblkdev_major > 0)
-		unregister_blkdev(sblkdev_major, KBUILD_MODNAME);
+		unregister_blkdev(sblkdev_major, KBUILD_MODNAME);                // unregister_blkdev() — освобождает major номер.
 }
 
 module_init(sblkdev_init);
