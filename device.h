@@ -8,11 +8,11 @@
 
 /*
 * The key structure of our module.
-* It contains all the information the kernel module needs about the device, in particular: the capacity of the block device, pointers to the disk and the queue.
+* It contains all the information about the device that the kernel module needs, in particular: the capacity of the block device, a set of tags for the request queues, a pointer to the disk.
 */
 /*
  * Ключевая структура нашего модуля.
- * Она содержит всю необходимую модулю ядра информацию об устройстве, в частности: ёмкость блочного устройства, указатели на диск и очередь.
+ * Она содержит всю необходимую модулю ядра информацию об устройстве, в частности: ёмкость блочного устройства, набор тегов для очередей запросов, указатель на диск.
 */
 struct sblkdev_device {                                  
 	struct list_head link;

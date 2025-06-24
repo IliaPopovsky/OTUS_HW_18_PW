@@ -399,8 +399,8 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 
 	pr_info("add device '%s' capacity %llu sectors\n", name, capacity);
 
-	dev = kzalloc(sizeof(struct sblkdev_device), GFP_KERNEL);
-	if (!dev) {
+	dev = kzalloc(sizeof(struct sblkdev_device), GFP_KERNEL);         // Allocate memory for the variable of the key structure of our module.
+	if (!dev) {                                                       // Выделяем память под переменную ключевой структуры нашего модуля.
 		ret = -ENOMEM;
 		goto fail;
 	}
