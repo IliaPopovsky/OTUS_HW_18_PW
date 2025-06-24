@@ -387,6 +387,9 @@ static inline struct gendisk *blk_alloc_disk(int node)
 /*
  * sblkdev_add() - Add simple block device
  */
+/*
+* sblkdev_add() - Добавить простое блочное устройство
+*/
 struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 				  sector_t capacity)
 {
@@ -474,14 +477,14 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 #endif
 	dev->disk = disk;
 
-	/* only one partition */
+	/* only one partition */  /* только один раздел */
 #ifdef GENHD_FL_NO_PART_SCAN
 	disk->flags |= GENHD_FL_NO_PART_SCAN;
 #else
 	disk->flags |= GENHD_FL_NO_PART;
 #endif
 
-	/* removable device */
+	/* removable device */  /* съемное устройство */
 	/* disk->flags |= GENHD_FL_REMOVABLE; */
 
 	disk->major = major;
@@ -501,7 +504,7 @@ struct sblkdev_device *sblkdev_add(int major, int minor, char *name,
 	#else
 	      disk->queue->limits.physical_block_size = CONFIG_SBLKDEV_BLOCK_SIZE;
 	      /*
-	      void blk_queue_physical_block_size(struct request_queue *q, unsigned int size) //https://elixir.bootlin.com/linux/v6.10.14/source/block/blk-settings.c#L425
+	      void blk_queue_physical_block_size(struct request_queue *q, unsigned int size)    //https://elixir.bootlin.com/linux/v6.10.14/source/block/blk-settings.c#L425
               {
 	          q->limits.physical_block_size = size;
 
@@ -734,6 +737,11 @@ fail_unregister:
  * Executed when the module is unloaded. Remove all block devices and cleanup
  * all resources.
  */
+/*
+* sblkdev_exit() - Точка входа 'exit'.
+*
+* Выполняется при выгрузке модуля. Удалить все блочные устройства и очистить все ресурсы.
+*/
 static void __exit sblkdev_exit(void)
 {
 	struct sblkdev_device *dev;
