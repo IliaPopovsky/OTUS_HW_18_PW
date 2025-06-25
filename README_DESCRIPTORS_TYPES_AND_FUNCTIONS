@@ -908,10 +908,10 @@ struct elevator_queue                                                           
 */ 
 struct elevator_type                                                               // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L64
 {
-	/* managed by elevator core */
+	/* managed by elevator core */     /* управляется ядром лифта */
 	struct kmem_cache *icq_cache;
 
-	/* fields provided by elevator implementation */
+	/* fields provided by elevator implementation */  /* поля, предоставляемые реализацией лифта */
 	struct elevator_mq_ops ops;
 
 	size_t icq_size;	/* see iocontext.h */
@@ -925,9 +925,98 @@ struct elevator_type                                                            
 	const struct blk_mq_debugfs_attr *hctx_debugfs_attrs;
 #endif
 
-	/* managed by elevator core */
+	/* managed by elevator core */   /* управляется ядром лифта */
 	char icq_cache_name[ELV_NAME_MAX + 6];	/* elvname + "_io_cq" */
 	struct list_head list;
+};
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+struct elevator_mq_ops {                                                           // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L26
+	int (*init_sched)(struct request_queue *, struct elevator_type *);
+	void (*exit_sched)(struct elevator_queue *);
+	int (*init_hctx)(struct blk_mq_hw_ctx *, unsigned int);
+	void (*exit_hctx)(struct blk_mq_hw_ctx *, unsigned int);
+	void (*depth_updated)(struct blk_mq_hw_ctx *);
+
+	bool (*allow_merge)(struct request_queue *, struct request *, struct bio *);
+	bool (*bio_merge)(struct request_queue *, struct bio *, unsigned int);
+	int (*request_merge)(struct request_queue *q, struct request **, struct bio *);
+	void (*request_merged)(struct request_queue *, struct request *, enum elv_merge);
+	void (*requests_merged)(struct request_queue *, struct request *, struct request *);
+	void (*limit_depth)(blk_opf_t, struct blk_mq_alloc_data *);
+	void (*prepare_request)(struct request *);
+	void (*finish_request)(struct request *);
+	void (*insert_requests)(struct blk_mq_hw_ctx *hctx, struct list_head *list,
+			blk_insert_t flags);
+	struct request *(*dispatch_request)(struct blk_mq_hw_ctx *);
+	bool (*has_work)(struct blk_mq_hw_ctx *);
+	void (*completed_request)(struct request *, u64);
+	void (*requeue_request)(struct request *);
+	struct request *(*former_request)(struct request_queue *, struct request *);
+	struct request *(*next_request)(struct request_queue *, struct request *);
+	void (*init_icq)(struct io_cq *);
+	void (*exit_icq)(struct io_cq *);
+};
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+static struct elevator_type iosched_bfq_mq = {                                       // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L7611
+	.ops = {
+		.limit_depth		= bfq_limit_depth,
+		.prepare_request	= bfq_prepare_request,
+		.requeue_request        = bfq_finish_requeue_request,
+		.finish_request		= bfq_finish_request,
+		.exit_icq		= bfq_exit_icq,
+		.insert_requests	= bfq_insert_requests,
+		.dispatch_request	= bfq_dispatch_request,
+		.next_request		= elv_rb_latter_request,
+		.former_request		= elv_rb_former_request,
+		.allow_merge		= bfq_allow_bio_merge,
+		.bio_merge		= bfq_bio_merge,
+		.request_merge		= bfq_request_merge,
+		.requests_merged	= bfq_requests_merged,
+		.request_merged		= bfq_request_merged,
+		.has_work		= bfq_has_work,
+		.depth_updated		= bfq_depth_updated,
+		.init_hctx		= bfq_init_hctx,
+		.init_sched		= bfq_init_queue,
+		.exit_sched		= bfq_exit_queue,
+	},
+
+	.icq_size =		sizeof(struct bfq_io_cq),
+	.icq_align =		__alignof__(struct bfq_io_cq),
+	.elevator_attrs =	bfq_attrs,
+	.elevator_name =	"bfq",
+	.elevator_owner =	THIS_MODULE,
+};
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+static struct elevator_type mq_deadline = {
+	.ops = {
+		.depth_updated		= dd_depth_updated,
+		.limit_depth		= dd_limit_depth,
+		.insert_requests	= dd_insert_requests,
+		.dispatch_request	= dd_dispatch_request,
+		.prepare_request	= dd_prepare_request,
+		.finish_request		= dd_finish_request,
+		.next_request		= elv_rb_latter_request,
+		.former_request		= elv_rb_former_request,
+		.bio_merge		= dd_bio_merge,
+		.request_merge		= dd_request_merge,
+		.requests_merged	= dd_merged_requests,
+		.request_merged		= dd_request_merged,
+		.has_work		= dd_has_work,
+		.init_sched		= dd_init_sched,
+		.exit_sched		= dd_exit_sched,
+		.init_hctx		= dd_init_hctx,
+	},
+
+#ifdef CONFIG_BLK_DEBUG_FS
+	.queue_debugfs_attrs = deadline_queue_debugfs_attrs,
+#endif
+	.elevator_attrs = deadline_attrs,
+	.elevator_name = "mq-deadline",
+	.elevator_alias = "deadline",
+	.elevator_owner = THIS_MODULE,
 };
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
