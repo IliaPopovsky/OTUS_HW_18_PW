@@ -1,0 +1,952 @@
+/*
+ * main unit of I/O for the block layer and lower layers (ie drivers and
+ * stacking drivers)
+ */
+/*
+ * основновная единица ввода-вывода для блочного уровня и нижних уровней (т.е. драйверы и
+ * стековые драйверы)
+ */
+// Stacking just means that some module calls functions defined in another module.                      // https://unix.stackexchange.com/questions/10812/module-stacking-in-linux-device-drivers
+// Of course, all of them make calls to basic kernel features (which aren't in modules).
+// Стекирование означает, что какой-то модуль вызывает функции, определенные в другом модуле. 
+// Конечно, все они вызывают базовые функции ядра (которых нет в модулях).
+/*
+The central management structure (bio) is associated with a vector whose individual entries each point       // Wolfgang Mauerer "Professional Linux Kernel Architecture"
+to a memory page (caution: Not the address in memory but the page instance belonging to the page).
+These pages are used to receive data from and send data to the device.
+The memory pages can but need not be organized contiguously; this facilitates the implementation of scatter-gather operations.
+*/
+/*
+Центральная структура управления (био) связана с вектором, отдельные записи которого указывают     
+на страницу памяти (внимание: не адрес в памяти, а экземпляр страницы, принадлежащий странице).
+Эти страницы используются для получения данных с устройства и отправки данных на него.
+Страницы памяти могут, но не обязательно, быть организованы последовательно; это облегчает реализацию операций разброса-сбора.
+*/
+struct bio {                                                                                           // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L211
+	struct bio		*bi_next;	/* request queue link */  /* combines several BIOs in a singly linked list associated with a request */ 
+	                                                                 /* объединяет несколько BIO в односвязный список, связанный с запросом */
+	struct block_device	*bi_bdev;      /* is a pointer to the block device data structure of the device to which the request belongs */
+	                                      /* — указатель на структуру данных блочного устройства, к которому относится запрос */
+	blk_opf_t		bi_opf;		/* bottom bits REQ_OP, top bits
+						 * req_flags.
+						 */
+	unsigned short		bi_flags;	/* BIO_* below */
+	unsigned short		bi_ioprio;
+	enum rw_hint		bi_write_hint;
+	blk_status_t		bi_status;
+	atomic_t		__bi_remaining;
+
+	struct bvec_iter	bi_iter;
+
+	union {
+		/* for polled bios: */
+		blk_qc_t		bi_cookie;
+		/* for plugged zoned writes only: */
+		unsigned int		__bi_nr_segments;
+	};
+	/*
+	bio_end_io_t must be invoked by the device driver when hardware transfer is completed. This           // Wolfgang Mauerer "Professional Linux Kernel Architecture"
+        gives the block layer the opportunity to do clean-up work or wake sleeping processes that are
+        waiting for the request to end.
+        */
+        /*
+        bio_end_io_t должен быть вызван драйвером устройства после завершения передачи оборудования. Это
+        дает блочному слою возможность выполнить очистку или разбудить спящие процессы, которые ожидают завершения запроса.
+        */
+	bio_end_io_t		*bi_end_io;              
+	void			*bi_private;                                    // is not modified by the generic BIO code and can be used for driver-specific information.
+	                                                                       // не модифицируется общим кодом BIO и может использоваться для получения информации, специфичной для драйвера.
+#ifdef CONFIG_BLK_CGROUP
+	/*
+	 * Represents the association of the css and request_queue for the bio.
+	 * If a bio goes direct to device, it will not have a blkg as it will
+	 * not have a request_queue associated with it.  The reference is put
+	 * on release of the bio.
+	 */
+	struct blkcg_gq		*bi_blkg;
+	struct bio_issue	bi_issue;
+#ifdef CONFIG_BLK_CGROUP_IOCOST
+	u64			bi_iocost_cost;
+#endif
+#endif
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	struct bio_crypt_ctx	*bi_crypt_context;
+#endif
+
+	union {
+#if defined(CONFIG_BLK_DEV_INTEGRITY)
+		struct bio_integrity_payload *bi_integrity; /* data integrity */
+#endif
+	};
+
+	unsigned short		bi_vcnt;	/* how many bio_vec's */
+
+	/*
+	 * Everything starting with bi_max_vecs will be preserved by bio_reset()
+	 */
+
+	unsigned short		bi_max_vecs;	/* max bvl_vecs we can hold */
+
+	atomic_t		__bi_cnt;	/* pin count */
+
+	struct bio_vec		*bi_io_vec;	/* the actual vec list */
+
+	struct bio_set		*bi_pool;
+
+	/*
+	 * We can inline a number of vecs at the end of the bio, to avoid
+	 * double allocations for a small number of bio_vecs. This member
+	 * MUST obviously be kept at the very end of the bio.
+	 */
+	struct bio_vec		bi_inline_vecs[];
+};
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+/**
+ * struct bio_vec - a contiguous range of physical memory addresses
+ * @bv_page:   First page associated with the address range.
+ * @bv_len:    Number of bytes in the address range.
+ * @bv_offset: Start of the address range relative to the start of @bv_page.
+ *
+ * The following holds for a bvec if n * PAGE_SIZE < bv_offset + bv_len:
+ *
+ *   nth_page(@bv_page, n) == @bv_page + n
+ *
+ * This holds because page_is_mergeable() checks the above property.
+ */
+ /**
+* struct bio_vec — непрерывный диапазон адресов физической памяти
+* @bv_page: Первая страница, связанная с диапазоном адресов.
+* @bv_len: Количество байтов в диапазоне адресов.
+* @bv_offset: Начало диапазона адресов относительно начала @bv_page.
+*
+* Следующее справедливо для bvec, если n * PAGE_SIZE < bv_offset + bv_len:
+*
+* nth_page(@bv_page, n) == @bv_page + n
+*
+* Это справедливо, поскольку page_is_mergeable() проверяет указанное выше свойство.
+*/
+/*
+bv_page points to the page instance of the page used for data transfer. bv_offset indicates the     // Wolfgang Mauerer "Professional Linux Kernel Architecture"
+offset within the page; typically this value is 0 because page boundaries are normally used as
+boundaries for I/O operations.
+len specifies the number of bytes used for the data if the whole page is not filled.
+*/
+/*
+bv_page указывает на экземпляр страницы, используемой для передачи данных. bv_offset указывает смещение внутри страницы; обычно это значение равно 0, 
+поскольку границы страницы обычно используются как границы для операций ввода-вывода.
+len указывает количество байтов, используемых для данных, если вся страница не заполнена.
+*/
+struct bio_vec {                                                               // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bvec.h#L31
+	struct page	*bv_page;
+	unsigned int	bv_len;
+	unsigned int	bv_offset;
+};
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct page {                                                                  //  https://elixir.bootlin.com/linux/v6.11/source/include/linux/mm_types.h#L72
+	unsigned long flags;		/* Atomic flags, some possibly
+					 * updated asynchronously */
+	/*
+	 * Five words (20/40 bytes) are available in this union.
+	 * WARNING: bit 0 of the first word is used for PageTail(). That
+	 * means the other users of this union MUST NOT use the bit to
+	 * avoid collision and false-positive PageTail().
+	 */
+	union {
+		struct {	/* Page cache and anonymous pages */
+			/**
+			 * @lru: Pageout list, eg. active_list protected by
+			 * lruvec->lru_lock.  Sometimes used as a generic list
+			 * by the page owner.
+			 */
+			union {
+				struct list_head lru;
+
+				/* Or, for the Unevictable "LRU list" slot */
+				struct {
+					/* Always even, to negate PageTail */
+					void *__filler;
+					/* Count page's or folio's mlocks */
+					unsigned int mlock_count;
+				};
+
+				/* Or, free page */
+				struct list_head buddy_list;
+				struct list_head pcp_list;
+			};
+			/* See page-flags.h for PAGE_MAPPING_FLAGS */
+			struct address_space *mapping;
+			union {
+				pgoff_t index;		/* Our offset within mapping. */
+				unsigned long share;	/* share count for fsdax */
+			};
+			/**
+			 * @private: Mapping-private opaque data.
+			 * Usually used for buffer_heads if PagePrivate.
+			 * Used for swp_entry_t if PageSwapCache.
+			 * Indicates order in the buddy system if PageBuddy.
+			 */
+			unsigned long private;
+		};
+		struct {	/* page_pool used by netstack */
+			/**
+			 * @pp_magic: magic value to avoid recycling non
+			 * page_pool allocated pages.
+			 */
+			unsigned long pp_magic;
+			struct page_pool *pp;
+			unsigned long _pp_mapping_pad;
+			unsigned long dma_addr;
+			atomic_long_t pp_ref_count;
+		};
+		struct {	/* Tail pages of compound page */
+			unsigned long compound_head;	/* Bit zero is set */
+		};
+		struct {	/* ZONE_DEVICE pages */
+			/** @pgmap: Points to the hosting device page map. */
+			struct dev_pagemap *pgmap;
+			void *zone_device_data;
+			/*
+			 * ZONE_DEVICE private pages are counted as being
+			 * mapped so the next 3 words hold the mapping, index,
+			 * and private fields from the source anonymous or
+			 * page cache page while the page is migrated to device
+			 * private memory.
+			 * ZONE_DEVICE MEMORY_DEVICE_FS_DAX pages also
+			 * use the mapping, index, and private fields when
+			 * pmem backed DAX files are mapped.
+			 */
+		};
+
+		/** @rcu_head: You can use this to free a page by RCU. */
+		struct rcu_head rcu_head;
+	};
+
+	union {		/* This union is 4 bytes in size. */
+		/*
+		 * For head pages of typed folios, the value stored here
+		 * allows for determining what this page is used for. The
+		 * tail pages of typed folios will not store a type
+		 * (page_type == _mapcount == -1).
+		 *
+		 * See page-flags.h for a list of page types which are currently
+		 * stored here.
+		 *
+		 * Owners of typed folios may reuse the lower 16 bit of the
+		 * head page page_type field after setting the page type,
+		 * but must reset these 16 bit to -1 before clearing the
+		 * page type.
+		 */
+		unsigned int page_type;
+
+		/*
+		 * For pages that are part of non-typed folios for which mappings
+		 * are tracked via the RMAP, encodes the number of times this page
+		 * is directly referenced by a page table.
+		 *
+		 * Note that the mapcount is always initialized to -1, so that
+		 * transitions both from it and to it can be tracked, using
+		 * atomic_inc_and_test() and atomic_add_negative(-1).
+		 */
+		atomic_t _mapcount;
+	};
+
+	/* Usage count. *DO NOT USE DIRECTLY*. See page_ref.h */
+	atomic_t _refcount;
+
+#ifdef CONFIG_MEMCG
+	unsigned long memcg_data;
+#elif defined(CONFIG_SLAB_OBJ_EXT)
+	unsigned long _unused_slab_obj_exts;
+#endif
+
+	/*
+	 * On machines where all RAM is mapped into kernel address space,
+	 * we can simply calculate the virtual address. On machines with
+	 * highmem some memory is mapped into kernel virtual memory
+	 * dynamically, so we need a place to store that address.
+	 * Note that this field could be 16 bits on x86 ... ;)
+	 *
+	 * Architectures with slow multiplication can define
+	 * WANT_PAGE_VIRTUAL in asm/page.h
+	 */
+#if defined(WANT_PAGE_VIRTUAL)
+	void *virtual;			/* Kernel virtual address (NULL if
+					   not kmapped, ie. highmem) */
+#endif /* WANT_PAGE_VIRTUAL */
+
+#ifdef LAST_CPUPID_NOT_IN_PAGE_FLAGS
+	int _last_cpupid;
+#endif
+
+#ifdef CONFIG_KMSAN
+	/*
+	 * KMSAN metadata for this page:
+	 *  - shadow page: every bit indicates whether the corresponding
+	 *    bit of the original page is initialized (0) or not (1);
+	 *  - origin page: every 4 bytes contain an id of the stack trace
+	 *    where the uninitialized value was created.
+	 */
+	struct page *kmsan_shadow;
+	struct page *kmsan_origin;
+#endif
+} _struct_page_alignment;
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+/**
+ * page_address - get the mapped virtual address of a page
+ * @page: &struct page to get the virtual address of
+ *
+ * Returns the page's virtual address.
+ */
+/**
+* page_address - получить сопоставленный виртуальный адрес страницы
+* @page: &struct page для получения виртуального адреса
+*
+* Возвращает виртуальный адрес страницы.
+*/
+void *page_address(const struct page *page)                             //  https://elixir.bootlin.com/linux/v6.11/source/mm/highmem.c#L753
+{
+	unsigned long flags;
+	void *ret;
+	struct page_address_slot *pas;
+
+	if (!PageHighMem(page))
+		return lowmem_page_address(page);
+
+	pas = page_slot(page);
+	ret = NULL;
+	spin_lock_irqsave(&pas->lock, flags);
+	if (!list_empty(&pas->lh)) {
+		struct page_address_map *pam;
+
+		list_for_each_entry(pam, &pas->lh, list) {
+			if (pam->page == page) {
+				ret = pam->virtual;
+				break;
+			}
+		}
+	}
+
+	spin_unlock_irqrestore(&pas->lock, flags);
+	return ret;
+}
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct bvec_iter {
+	sector_t		bi_sector;	/* device address in 512 byte
+						   sectors */
+	unsigned int		bi_size;	/* residual I/O count */
+
+	unsigned int		bi_idx;		/* current index into bvl_vec */
+
+	unsigned int            bi_bvec_done;	/* number of bytes completed in
+						   current bvec */
+} __packed __aligned(4);
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct block_device_operations {                                                             https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1470
+	void (*submit_bio)(struct bio *bio);
+	int (*poll_bio)(struct bio *bio, struct io_comp_batch *iob,
+			unsigned int flags);
+	int (*open)(struct gendisk *disk, blk_mode_t mode);
+	void (*release)(struct gendisk *disk);
+	int (*ioctl)(struct block_device *bdev, blk_mode_t mode,
+			unsigned cmd, unsigned long arg);
+	int (*compat_ioctl)(struct block_device *bdev, blk_mode_t mode,
+			unsigned cmd, unsigned long arg);
+	unsigned int (*check_events) (struct gendisk *disk,
+				      unsigned int clearing);
+	void (*unlock_native_capacity) (struct gendisk *);
+	int (*getgeo)(struct block_device *, struct hd_geometry *);
+	int (*set_read_only)(struct block_device *bdev, bool ro);
+	void (*free_disk)(struct gendisk *disk);
+	/* this callback is with swap_lock and sometimes page table lock held */
+	void (*swap_slot_free_notify) (struct block_device *, unsigned long);
+	int (*report_zones)(struct gendisk *, sector_t sector,
+			unsigned int nr_zones, report_zones_cb cb, void *data);
+	char *(*devnode)(struct gendisk *disk, umode_t *mode);
+	/* returns the length of the identifier or a negative errno: */
+	int (*get_unique_id)(struct gendisk *disk, u8 id[16],
+			enum blk_unique_id id_type);
+	struct module *owner;
+	const struct pr_ops *pr_ops;
+
+	/*
+	 * Special callback for probing GPT entry at a given sector.
+	 * Needed by Android devices, used by GPT scanner and MMC blk
+	 * driver.
+	 */
+	int (*alternative_gpt_sector)(struct gendisk *disk, sector_t *sector);
+};
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+/**
+ * struct blk_mq_tag_set - tag set that can be shared between request queues            
+ * @ops:	   Pointers to functions that implement block driver behavior.
+ * @map:	   One or more ctx -> hctx mappings. One map exists for each
+ *		   hardware queue type (enum hctx_type) that the driver wishes
+ *		   to support. There are no restrictions on maps being of the
+ *		   same size, and it's perfectly legal to share maps between
+ *		   types.
+ * @nr_maps:	   Number of elements in the @map array. A number in the range
+ *		   [1, HCTX_MAX_TYPES].
+ * @nr_hw_queues:  Number of hardware queues supported by the block driver that
+ *		   owns this data structure.
+ * @queue_depth:   Number of tags per hardware queue, reserved tags included.
+ * @reserved_tags: Number of tags to set aside for BLK_MQ_REQ_RESERVED tag
+ *		   allocations.
+ * @cmd_size:	   Number of additional bytes to allocate per request. The block
+ *		   driver owns these additional bytes.
+ * @numa_node:	   NUMA node the storage adapter has been connected to.
+ * @timeout:	   Request processing timeout in jiffies.
+ * @flags:	   Zero or more BLK_MQ_F_* flags.
+ * @driver_data:   Pointer to data owned by the block driver that created this
+ *		   tag set.
+ * @tags:	   Tag sets. One tag set per hardware queue. Has @nr_hw_queues
+ *		   elements.
+ * @shared_tags:
+ *		   Shared set of tags. Has @nr_hw_queues elements. If set,
+ *		   shared by all @tags.
+ * @tag_list_lock: Serializes tag_list accesses.
+ * @tag_list:	   List of the request queues that use this tag set. See also
+ *		   request_queue.tag_set_list.
+ * @srcu:	   Use as lock when type of the request queue is blocking
+ *		   (BLK_MQ_F_BLOCKING).
+ */
+ /**
+* struct blk_mq_tag_set — набор тегов, который может быть общим для очередей запросов
+* @ops: Указатели на функции, реализующие поведение блочного драйвера.
+* @map: Одно или несколько отображений ctx -> hctx. Существует одно отображение для каждого
+* типа аппаратной очереди (enum hctx_type), который драйвер хочет
+* поддерживать. Нет ограничений на то, чтобы карты были
+* одинакового размера, и совершенно допустимо совместное использование карт между
+* типами.
+* @nr_maps: Количество элементов в массиве @map. Число в диапазоне
+* [1, HCTX_MAX_TYPES].
+* @nr_hw_queues: Количество аппаратных очередей, поддерживаемых блочным драйвером, которому
+* принадлежит эта структура данных.
+* @queue_depth: Количество тегов на аппаратную очередь, включая зарезервированные теги.
+* @reserved_tags: Количество тегов, отложенных для тега BLK_MQ_REQ_RESERVED
+* выделений.
+* @cmd_size: Количество дополнительных байтов для выделения на запрос. Драйвер блока
+* владеет этими дополнительными байтами.
+* @numa_node: Узел NUMA, к которому подключен адаптер хранилища.
+* @timeout: Тайм-аут обработки запроса в мизерах.
+* @flags: Ноль или более флагов BLK_MQ_F_*.
+* @driver_data: Указатель на данные, принадлежащие драйверу блока, который создал этот
+* набор тегов.
+* @tags: Наборы тегов. Один набор тегов на аппаратную очередь. Имеет элементы @nr_hw_queues
+*.
+* @shared_tags:
+* Общий набор тегов. Имеет элементы @nr_hw_queues. Если установлено,
+* используется всеми @tags.
+
+* @tag_list_lock: Сериализует доступы tag_list.
+* @tag_list: Список очередей запросов, которые используют этот набор тегов. См. также
+* request_queue.tag_set_list.
+* @srcu: Использовать как блокировку, когда тип очереди запросов — блокирующий
+* (BLK_MQ_F_BLOCKING).
+*/
+struct blk_mq_tag_set {                                                                      //  https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L522
+	const struct blk_mq_ops	*ops;
+	struct blk_mq_queue_map	map[HCTX_MAX_TYPES];
+	unsigned int		nr_maps;
+	unsigned int		nr_hw_queues;
+	unsigned int		queue_depth;
+	unsigned int		reserved_tags;
+	unsigned int		cmd_size;
+	int			numa_node;
+	unsigned int		timeout;
+	unsigned int		flags;
+	void			*driver_data;
+
+	struct blk_mq_tags	**tags;
+
+	struct blk_mq_tags	*shared_tags;
+
+	struct mutex		tag_list_lock;
+	struct list_head	tag_list;
+	struct srcu_struct	*srcu;
+};
+
+----------------------------------------------------------------------------------------------------------------------------------
+/**
+ * struct blk_mq_ops - Callback functions that implements block driver behaviour.
+ */
+/**
+* struct blk_mq_ops - Функции обратного вызова, реализующие поведение драйвера блока.
+*/
+struct blk_mq_ops {                                                                              // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L561
+	/**
+	 * @queue_rq: Queue a new request from block IO.
+	 */
+	blk_status_t (*queue_rq)(struct blk_mq_hw_ctx *,
+				 const struct blk_mq_queue_data *);
+
+	/**
+	 * @commit_rqs: If a driver uses bd->last to judge when to submit
+	 * requests to hardware, it must define this function. In case of errors
+	 * that make us stop issuing further requests, this hook serves the
+	 * purpose of kicking the hardware (which the last request otherwise
+	 * would have done).
+	 */
+	void (*commit_rqs)(struct blk_mq_hw_ctx *);
+
+	/**
+	 * @queue_rqs: Queue a list of new requests. Driver is guaranteed
+	 * that each request belongs to the same queue. If the driver doesn't
+	 * empty the @rqlist completely, then the rest will be queued
+	 * individually by the block layer upon return.
+	 */
+	void (*queue_rqs)(struct request **rqlist);
+
+	/**
+	 * @get_budget: Reserve budget before queue request, once .queue_rq is
+	 * run, it is driver's responsibility to release the
+	 * reserved budget. Also we have to handle failure case
+	 * of .get_budget for avoiding I/O deadlock.
+	 */
+	int (*get_budget)(struct request_queue *);
+
+	/**
+	 * @put_budget: Release the reserved budget.
+	 */
+	void (*put_budget)(struct request_queue *, int);
+
+	/**
+	 * @set_rq_budget_token: store rq's budget token
+	 */
+	void (*set_rq_budget_token)(struct request *, int);
+	/**
+	 * @get_rq_budget_token: retrieve rq's budget token
+	 */
+	int (*get_rq_budget_token)(struct request *);
+
+	/**
+	 * @timeout: Called on request timeout.
+	 */
+	enum blk_eh_timer_return (*timeout)(struct request *);
+
+	/**
+	 * @poll: Called to poll for completion of a specific tag.
+	 */
+	int (*poll)(struct blk_mq_hw_ctx *, struct io_comp_batch *);
+
+	/**
+	 * @complete: Mark the request as complete.
+	 */
+	void (*complete)(struct request *);
+
+	/**
+	 * @init_hctx: Called when the block layer side of a hardware queue has
+	 * been set up, allowing the driver to allocate/init matching
+	 * structures.
+	 */
+	int (*init_hctx)(struct blk_mq_hw_ctx *, void *, unsigned int);
+	/**
+	 * @exit_hctx: Ditto for exit/teardown.
+	 */
+	void (*exit_hctx)(struct blk_mq_hw_ctx *, unsigned int);
+
+	/**
+	 * @init_request: Called for every command allocated by the block layer
+	 * to allow the driver to set up driver specific data.
+	 *
+	 * Tag greater than or equal to queue_depth is for setting up
+	 * flush request.
+	 */
+	int (*init_request)(struct blk_mq_tag_set *set, struct request *,
+			    unsigned int, unsigned int);
+	/**
+	 * @exit_request: Ditto for exit/teardown.
+	 */
+	void (*exit_request)(struct blk_mq_tag_set *set, struct request *,
+			     unsigned int);
+
+	/**
+	 * @cleanup_rq: Called before freeing one request which isn't completed
+	 * yet, and usually for freeing the driver private data.
+	 */
+	void (*cleanup_rq)(struct request *);
+
+	/**
+	 * @busy: If set, returns whether or not this queue currently is busy.
+	 */
+	bool (*busy)(struct request_queue *);
+
+	/**
+	 * @map_queues: This allows drivers specify their own queue mapping by
+	 * overriding the setup-time function that builds the mq_map.
+	 */
+	void (*map_queues)(struct blk_mq_tag_set *set);
+
+#ifdef CONFIG_BLK_DEBUG_FS
+	/**
+	 * @show_rq: Used by the debugfs implementation to show driver-specific
+	 * information about a request.
+	 */
+	void (*show_rq)(struct seq_file *m, struct request *rq);
+#endif
+};
+
+---------------------------------------------------------------------------------------------------------------------------------------------------
+
+/*
+ * Try to put the fields that are referenced together in the same cacheline.
+ *
+ * If you modify this structure, make sure to update blk_rq_init() and
+ * especially blk_mq_rq_ctx_init() to take care of the added fields.
+ */
+/*
+* Попробуйте поместить поля, на которые есть ссылки, вместе в одну строку кэша.
+*
+* Если вы измените эту структуру, обязательно обновите blk_rq_init() и особенно blk_mq_rq_ctx_init(), чтобы позаботиться о добавленных полях.
+*/
+struct request {                                              // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L102
+	struct request_queue *q;
+	struct blk_mq_ctx *mq_ctx;
+	struct blk_mq_hw_ctx *mq_hctx;
+
+	blk_opf_t cmd_flags;		/* op and common flags */
+	req_flags_t rq_flags;
+
+	int tag;
+	int internal_tag;
+
+	unsigned int timeout;
+
+	/* the following two fields are internal, NEVER access directly */
+	unsigned int __data_len;	/* total data len */
+	sector_t __sector;		/* sector cursor */
+
+	struct bio *bio;
+	struct bio *biotail;
+
+	union {
+		struct list_head queuelist;
+		struct request *rq_next;
+	};
+
+	struct block_device *part;
+#ifdef CONFIG_BLK_RQ_ALLOC_TIME
+	/* Time that the first bio started allocating this request. */
+	u64 alloc_time_ns;
+#endif
+	/* Time that this request was allocated for this IO. */
+	u64 start_time_ns;
+	/* Time that I/O was submitted to the device. */
+	u64 io_start_time_ns;
+
+#ifdef CONFIG_BLK_WBT
+	unsigned short wbt_flags;
+#endif
+	/*
+	 * rq sectors used for blk stats. It has the same value
+	 * with blk_rq_sectors(rq), except that it never be zeroed
+	 * by completion.
+	 */
+	unsigned short stats_sectors;
+
+	/*
+	 * Number of scatter-gather DMA addr+len pairs after
+	 * physical address coalescing is performed.
+	 */
+	unsigned short nr_phys_segments;
+
+#ifdef CONFIG_BLK_DEV_INTEGRITY
+	unsigned short nr_integrity_segments;
+#endif
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	struct bio_crypt_ctx *crypt_ctx;
+	struct blk_crypto_keyslot *crypt_keyslot;
+#endif
+
+	enum rw_hint write_hint;
+	unsigned short ioprio;
+
+	enum mq_rq_state state;
+	atomic_t ref;
+
+	unsigned long deadline;
+
+	/*
+	 * The hash is used inside the scheduler, and killed once the
+	 * request reaches the dispatch list. The ipi_list is only used
+	 * to queue the request for softirq completion, which is long
+	 * after the request has been unhashed (and even removed from
+	 * the dispatch list).
+	 */
+	union {
+		struct hlist_node hash;	/* merge hash */
+		struct llist_node ipi_list;
+	};
+
+	/*
+	 * The rb_node is only used inside the io scheduler, requests
+	 * are pruned when moved to the dispatch queue. special_vec must
+	 * only be used if RQF_SPECIAL_PAYLOAD is set, and those cannot be
+	 * insert into an IO scheduler.
+	 */
+	union {
+		struct rb_node rb_node;	/* sort/lookup */
+		struct bio_vec special_vec;
+	};
+
+	/*
+	 * Three pointers are available for the IO schedulers, if they need
+	 * more they have to dynamically allocate it.
+	 */
+	struct {
+		struct io_cq		*icq;
+		void			*priv[2];
+	} elv;
+
+	struct {
+		unsigned int		seq;
+		rq_end_io_fn		*saved_end_io;
+	} flush;
+
+	u64 fifo_time;
+
+	/*
+	 * completion callback.
+	 */
+	rq_end_io_fn *end_io;
+	void *end_io_data;
+};
+
+------------------------------------------------------------------------------------------------------------------------------
+struct request_queue {
+	/*
+	 * The queue owner gets to use this for whatever they like.
+	 * ll_rw_blk doesn't touch it.
+	 */
+	/*
+	 * Владелец очереди может использовать это по своему усмотрению.
+	 * ll_rw_blk не трогает это.
+	 */
+	void			*queuedata;
+
+	struct elevator_queue	*elevator;
+
+	const struct blk_mq_ops	*mq_ops;
+
+	/* sw queues */
+	struct blk_mq_ctx __percpu	*queue_ctx;
+
+	/*
+	 * various queue flags, see QUEUE_* below
+	 */
+	unsigned long		queue_flags;
+
+	unsigned int		rq_timeout;
+
+	unsigned int		queue_depth;
+
+	refcount_t		refs;
+
+	/* hw dispatch queues */
+	unsigned int		nr_hw_queues;
+	struct xarray		hctx_table;
+
+	struct percpu_ref	q_usage_counter;
+
+	struct request		*last_merge;
+
+	spinlock_t		queue_lock;
+
+	int			quiesce_depth;
+
+	struct gendisk		*disk;
+
+	/*
+	 * mq queue kobject
+	 */
+	struct kobject *mq_kobj;
+
+	struct queue_limits	limits;
+
+#ifdef CONFIG_PM
+	struct device		*dev;
+	enum rpm_status		rpm_status;
+#endif
+
+	/*
+	 * Number of contexts that have called blk_set_pm_only(). If this
+	 * counter is above zero then only RQF_PM requests are processed.
+	 */
+	atomic_t		pm_only;
+
+	struct blk_queue_stats	*stats;
+	struct rq_qos		*rq_qos;
+	struct mutex		rq_qos_mutex;
+
+	/*
+	 * ida allocated id for this queue.  Used to index queues from
+	 * ioctx.
+	 */
+	int			id;
+
+	/*
+	 * queue settings
+	 */
+	unsigned long		nr_requests;	/* Max # of requests */
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	struct blk_crypto_profile *crypto_profile;
+	struct kobject *crypto_kobject;
+#endif
+
+	struct timer_list	timeout;
+	struct work_struct	timeout_work;
+
+	atomic_t		nr_active_requests_shared_tags;
+
+	struct blk_mq_tags	*sched_shared_tags;
+
+	struct list_head	icq_list;
+#ifdef CONFIG_BLK_CGROUP
+	DECLARE_BITMAP		(blkcg_pols, BLKCG_MAX_POLS);
+	struct blkcg_gq		*root_blkg;
+	struct list_head	blkg_list;
+	struct mutex		blkcg_mutex;
+#endif
+
+	int			node;
+
+	spinlock_t		requeue_lock;
+	struct list_head	requeue_list;
+	struct delayed_work	requeue_work;
+
+#ifdef CONFIG_BLK_DEV_IO_TRACE
+	struct blk_trace __rcu	*blk_trace;
+#endif
+	/*
+	 * for flush operations
+	 */
+	struct blk_flush_queue	*fq;
+	struct list_head	flush_list;
+
+	struct mutex		sysfs_lock;
+	struct mutex		sysfs_dir_lock;
+	struct mutex		limits_lock;
+
+	/*
+	 * for reusing dead hctx instance in case of updating
+	 * nr_hw_queues
+	 */
+	struct list_head	unused_hctx_list;
+	spinlock_t		unused_hctx_lock;
+
+	int			mq_freeze_depth;
+
+#ifdef CONFIG_BLK_DEV_THROTTLING
+	/* Throttle data */
+	struct throtl_data *td;
+#endif
+	struct rcu_head		rcu_head;
+	wait_queue_head_t	mq_freeze_wq;
+	/*
+	 * Protect concurrent access to q_usage_counter by
+	 * percpu_ref_kill() and percpu_ref_reinit().
+	 */
+	struct mutex		mq_freeze_lock;
+
+	struct blk_mq_tag_set	*tag_set;
+	struct list_head	tag_set_list;
+
+	struct dentry		*debugfs_dir;
+	struct dentry		*sched_debugfs_dir;
+	struct dentry		*rqos_debugfs_dir;
+	/*
+	 * Serializes all debugfs metadata operations using the above dentries.
+	 */
+	struct mutex		debugfs_mutex;
+
+	bool			mq_sysfs_init_done;
+};
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * each queue has an elevator_queue associated with it
+ */
+/*
+* каждая очередь имеет лифтовую_очередь, связанную с ней
+*/
+struct elevator_queue                                                               // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L113
+{
+	struct elevator_type *type;
+	void *elevator_data;
+	struct kobject kobj;
+	struct mutex sysfs_lock;
+	unsigned long flags;
+	DECLARE_HASHTABLE(hash, ELV_HASH_BITS);
+};
+
+------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * identifies an elevator type, such as AS or deadline
+ */
+/*
+* определяет тип лифта, например AS или deadline
+*/
+/*
+ Вот краткое описание основных планировщиков I/O в Linux: 
+ CFQ (Completely Fair Queuing):
+ Распределяет время доступа к диску между процессами, стараясь обеспечить равномерный доступ для всех задач.
+ Deadline scheduler:
+ Устанавливает крайние сроки для выполнения операций ввода-вывода, что может быть полезно в системах реального времени или приложениях, чувствительных к задержкам.
+ Anticipatory I/O scheduler:
+ Предугадывает следующие операции ввода-вывода, пытаясь оптимизировать доступ к диску, но иногда это может приводить к увеличению задержек.
+ Noop scheduler:
+ Простой планировщик, который просто выполняет операции ввода-вывода в том порядке, в котором они поступают. Он эффективен для твердотельных накопителей (SSD) и устройств, где нет механических
+ задержек.
+*/ 
+struct elevator_type                                                               // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L64
+{
+	/* managed by elevator core */
+	struct kmem_cache *icq_cache;
+
+	/* fields provided by elevator implementation */
+	struct elevator_mq_ops ops;
+
+	size_t icq_size;	/* see iocontext.h */
+	size_t icq_align;	/* ditto */
+	struct elv_fs_entry *elevator_attrs;
+	const char *elevator_name;
+	const char *elevator_alias;
+	struct module *elevator_owner;
+#ifdef CONFIG_BLK_DEBUG_FS
+	const struct blk_mq_debugfs_attr *queue_debugfs_attrs;
+	const struct blk_mq_debugfs_attr *hctx_debugfs_attrs;
+#endif
+
+	/* managed by elevator core */
+	char icq_cache_name[ELV_NAME_MAX + 6];	/* elvname + "_io_cq" */
+	struct list_head list;
+};
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+struct kobject {
+	const char		*name;
+	struct list_head	entry;
+	struct kobject		*parent;
+	struct kset		*kset;
+	const struct kobj_type	*ktype;
+	struct kernfs_node	*sd; /* sysfs directory entry */
+	struct kref		kref;
+
+	unsigned int state_initialized:1;
+	unsigned int state_in_sysfs:1;
+	unsigned int state_add_uevent_sent:1;
+	unsigned int state_remove_uevent_sent:1;
+	unsigned int uevent_suppress:1;
+
+#ifdef CONFIG_DEBUG_KOBJECT_RELEASE
+	struct delayed_work	release;
+#endif
+};
