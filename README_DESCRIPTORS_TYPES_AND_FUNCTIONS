@@ -483,6 +483,9 @@ struct blk_mq_ops {                                                             
 	/**
 	 * @queue_rq: Queue a new request from block IO.
 	 */
+	/**
+	 * @queue_rq: Поставить в очередь новый запрос из блока ввода-вывода.
+	 */
 	blk_status_t (*queue_rq)(struct blk_mq_hw_ctx *,
 				 const struct blk_mq_queue_data *);
 
@@ -493,6 +496,12 @@ struct blk_mq_ops {                                                             
 	 * purpose of kicking the hardware (which the last request otherwise
 	 * would have done).
 	 */
+	/**
+	 * @commit_rqs: Если драйвер использует bd->last для оценки того, когда отправлять
+	 * запросы оборудованию, он должен определить эту функцию. В случае ошибок,
+	 * которые заставляют нас прекратить отправку дальнейших запросов, этот хук служит
+	 * цели отключения оборудования (что в противном случае сделал бы последний запрос).
+	 */
 	void (*commit_rqs)(struct blk_mq_hw_ctx *);
 
 	/**
@@ -500,6 +509,12 @@ struct blk_mq_ops {                                                             
 	 * that each request belongs to the same queue. If the driver doesn't
 	 * empty the @rqlist completely, then the rest will be queued
 	 * individually by the block layer upon return.
+	 */
+	/**
+	 * @queue_rqs: Поставить в очередь список новых запросов. Драйверу гарантируется,
+	 * что каждый запрос принадлежит одной и той же очереди. Если драйвер не
+	 * полностью очистит @rqlist, то остальные будут поставлены в очередь
+	 * индивидуально блочным слоем по возвращении.
 	 */
 	void (*queue_rqs)(struct request **rqlist);
 
@@ -509,34 +524,59 @@ struct blk_mq_ops {                                                             
 	 * reserved budget. Also we have to handle failure case
 	 * of .get_budget for avoiding I/O deadlock.
 	 */
+	/**
+	 * @get_budget: Резервный бюджет перед запросом очереди, после того, как .queue_rq
+	 * запущен, драйвер несет ответственность за освобождение
+	 * зарезервированного бюджета. Также мы должны обработать случай сбоя
+	 * .get_budget, чтобы избежать взаимоблокировки ввода-вывода.
+	 */
 	int (*get_budget)(struct request_queue *);
 
 	/**
 	 * @put_budget: Release the reserved budget.
+	 */
+	/**
+	 * @put_budget: Освободить зарезервированный бюджет.
 	 */
 	void (*put_budget)(struct request_queue *, int);
 
 	/**
 	 * @set_rq_budget_token: store rq's budget token
 	 */
+	/**
+	 * @set_rq_budget_token: сохранить токен бюджета rq
+	 */
 	void (*set_rq_budget_token)(struct request *, int);
+	
 	/**
 	 * @get_rq_budget_token: retrieve rq's budget token
+	 */
+	/**
+	 * @get_rq_budget_token: получить токен бюджета rq
 	 */
 	int (*get_rq_budget_token)(struct request *);
 
 	/**
 	 * @timeout: Called on request timeout.
 	 */
+	/**
+	 * @timeout: Вызывается по тайм-ауту запроса.
+	 */
 	enum blk_eh_timer_return (*timeout)(struct request *);
 
 	/**
 	 * @poll: Called to poll for completion of a specific tag.
 	 */
+	/**
+	 * @poll: Вызывается для опроса на предмет завершения определенного тега.
+	 */
 	int (*poll)(struct blk_mq_hw_ctx *, struct io_comp_batch *);
 
 	/**
 	 * @complete: Mark the request as complete.
+	 */
+	/**
+	 * @complete: Отметить запрос как выполненный.
 	 */
 	void (*complete)(struct request *);
 
@@ -545,9 +585,18 @@ struct blk_mq_ops {                                                             
 	 * been set up, allowing the driver to allocate/init matching
 	 * structures.
 	 */
+	/**
+	 * @init_hctx: Вызывается, когда сторона блочного уровня аппаратной очереди
+	 * настроена, позволяя драйверу выделять/инициализировать соответствующие
+	 * структуры.
+	 */
 	int (*init_hctx)(struct blk_mq_hw_ctx *, void *, unsigned int);
+	
 	/**
 	 * @exit_hctx: Ditto for exit/teardown.
+	 */
+	/**
+	 * @exit_hctx: То же самое для выхода/демонтажа.
 	 */
 	void (*exit_hctx)(struct blk_mq_hw_ctx *, unsigned int);
 
@@ -558,10 +607,20 @@ struct blk_mq_ops {                                                             
 	 * Tag greater than or equal to queue_depth is for setting up
 	 * flush request.
 	 */
+	/**
+	 * @init_request: Вызывается для каждой команды, выделенной блочным слоем,
+	 * чтобы позволить драйверу настроить специфические данные драйвера.
+	 *
+	 * Тег, больший или равный queue_depth, предназначен для настройки
+	 * запроса на сброс.
+	 */
 	int (*init_request)(struct blk_mq_tag_set *set, struct request *,
 			    unsigned int, unsigned int);
 	/**
 	 * @exit_request: Ditto for exit/teardown.
+	 */
+	/**
+	 * @exit_request: То же самое для выхода/демонтажа.
 	 */
 	void (*exit_request)(struct blk_mq_tag_set *set, struct request *,
 			     unsigned int);
@@ -570,16 +629,27 @@ struct blk_mq_ops {                                                             
 	 * @cleanup_rq: Called before freeing one request which isn't completed
 	 * yet, and usually for freeing the driver private data.
 	 */
+	/**
+	 * @cleanup_rq: Вызывается перед освобождением одного запроса, который еще не завершен,
+	 * и обычно для освобождения личных данных драйвера.
+	 */
 	void (*cleanup_rq)(struct request *);
 
 	/**
 	 * @busy: If set, returns whether or not this queue currently is busy.
+	 */
+	/**
+	 * @busy: Если установлено, возвращает, занята ли эта очередь в данный момент.
 	 */
 	bool (*busy)(struct request_queue *);
 
 	/**
 	 * @map_queues: This allows drivers specify their own queue mapping by
 	 * overriding the setup-time function that builds the mq_map.
+	 */
+	/**
+	 * @map_queues: Это позволяет драйверам указывать собственное отображение очередей,
+	 * переопределяя функцию времени настройки, которая создает mq_map.
 	 */
 	void (*map_queues)(struct blk_mq_tag_set *set);
 
@@ -588,12 +658,15 @@ struct blk_mq_ops {                                                             
 	 * @show_rq: Used by the debugfs implementation to show driver-specific
 	 * information about a request.
 	 */
+	/**
+	 * @show_rq: Используется реализацией debugfs для отображения специфичной для драйвера
+	 * информации о запросе.
+	 */
 	void (*show_rq)(struct seq_file *m, struct request *rq);
 #endif
 };
 
 ---------------------------------------------------------------------------------------------------------------------------------------------------
-
 /*
  * Try to put the fields that are referenced together in the same cacheline.
  *
@@ -1009,6 +1082,185 @@ static int bfq_request_merge(struct request_queue *q, struct request **req,     
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
+static int bfq_init_queue(struct request_queue *q, struct elevator_type *e)                        // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L7194
+{
+	struct bfq_data *bfqd;
+	struct elevator_queue *eq;
+	unsigned int i;
+	struct blk_independent_access_ranges *ia_ranges = q->disk->ia_ranges;
+
+	eq = elevator_alloc(q, e);
+	if (!eq)
+		return -ENOMEM;
+
+	bfqd = kzalloc_node(sizeof(*bfqd), GFP_KERNEL, q->node);
+	if (!bfqd) {
+		kobject_put(&eq->kobj);
+		return -ENOMEM;
+	}
+	eq->elevator_data = bfqd;
+
+	spin_lock_irq(&q->queue_lock);
+	q->elevator = eq;
+	spin_unlock_irq(&q->queue_lock);
+
+	/*
+	 * Our fallback bfqq if bfq_find_alloc_queue() runs into OOM issues.
+	 * Grab a permanent reference to it, so that the normal code flow
+	 * will not attempt to free it.
+	 * Set zero as actuator index: we will pretend that
+	 * all I/O requests are for the same actuator.
+	 */
+	bfq_init_bfqq(bfqd, &bfqd->oom_bfqq, NULL, 1, 0, 0);
+	bfqd->oom_bfqq.ref++;
+	bfqd->oom_bfqq.new_ioprio = BFQ_DEFAULT_QUEUE_IOPRIO;
+	bfqd->oom_bfqq.new_ioprio_class = IOPRIO_CLASS_BE;
+	bfqd->oom_bfqq.entity.new_weight =
+		bfq_ioprio_to_weight(bfqd->oom_bfqq.new_ioprio);
+
+	/* oom_bfqq does not participate to bursts */
+	bfq_clear_bfqq_just_created(&bfqd->oom_bfqq);
+
+	/*
+	 * Trigger weight initialization, according to ioprio, at the
+	 * oom_bfqq's first activation. The oom_bfqq's ioprio and ioprio
+	 * class won't be changed any more.
+	 */
+	bfqd->oom_bfqq.entity.prio_changed = 1;
+
+	bfqd->queue = q;
+
+	bfqd->num_actuators = 1;
+	/*
+	 * If the disk supports multiple actuators, copy independent
+	 * access ranges from the request queue structure.
+	 */
+	spin_lock_irq(&q->queue_lock);
+	if (ia_ranges) {
+		/*
+		 * Check if the disk ia_ranges size exceeds the current bfq
+		 * actuator limit.
+		 */
+		if (ia_ranges->nr_ia_ranges > BFQ_MAX_ACTUATORS) {
+			pr_crit("nr_ia_ranges higher than act limit: iars=%d, max=%d.\n",
+				ia_ranges->nr_ia_ranges, BFQ_MAX_ACTUATORS);
+			pr_crit("Falling back to single actuator mode.\n");
+		} else {
+			bfqd->num_actuators = ia_ranges->nr_ia_ranges;
+
+			for (i = 0; i < bfqd->num_actuators; i++) {
+				bfqd->sector[i] = ia_ranges->ia_range[i].sector;
+				bfqd->nr_sectors[i] =
+					ia_ranges->ia_range[i].nr_sectors;
+			}
+		}
+	}
+
+	/* Otherwise use single-actuator dev info */
+	if (bfqd->num_actuators == 1) {
+		bfqd->sector[0] = 0;
+		bfqd->nr_sectors[0] = get_capacity(q->disk);
+	}
+	spin_unlock_irq(&q->queue_lock);
+
+	INIT_LIST_HEAD(&bfqd->dispatch);
+
+	hrtimer_init(&bfqd->idle_slice_timer, CLOCK_MONOTONIC,
+		     HRTIMER_MODE_REL);
+	bfqd->idle_slice_timer.function = bfq_idle_slice_timer;
+
+	bfqd->queue_weights_tree = RB_ROOT_CACHED;
+#ifdef CONFIG_BFQ_GROUP_IOSCHED
+	bfqd->num_groups_with_pending_reqs = 0;
+#endif
+
+	INIT_LIST_HEAD(&bfqd->active_list[0]);
+	INIT_LIST_HEAD(&bfqd->active_list[1]);
+	INIT_LIST_HEAD(&bfqd->idle_list);
+	INIT_HLIST_HEAD(&bfqd->burst_list);
+
+	bfqd->hw_tag = -1;
+	bfqd->nonrot_with_queueing = blk_queue_nonrot(bfqd->queue);
+
+	bfqd->bfq_max_budget = bfq_default_max_budget;
+
+	bfqd->bfq_fifo_expire[0] = bfq_fifo_expire[0];
+	bfqd->bfq_fifo_expire[1] = bfq_fifo_expire[1];
+	bfqd->bfq_back_max = bfq_back_max;
+	bfqd->bfq_back_penalty = bfq_back_penalty;
+	bfqd->bfq_slice_idle = bfq_slice_idle;
+	bfqd->bfq_timeout = bfq_timeout;
+
+	bfqd->bfq_large_burst_thresh = 8;
+	bfqd->bfq_burst_interval = msecs_to_jiffies(180);
+
+	bfqd->low_latency = true;
+
+	/*
+	 * Trade-off between responsiveness and fairness.
+	 */
+	bfqd->bfq_wr_coeff = 30;
+	bfqd->bfq_wr_rt_max_time = msecs_to_jiffies(300);
+	bfqd->bfq_wr_min_idle_time = msecs_to_jiffies(2000);
+	bfqd->bfq_wr_min_inter_arr_async = msecs_to_jiffies(500);
+	bfqd->bfq_wr_max_softrt_rate = 7000; /*
+					      * Approximate rate required
+					      * to playback or record a
+					      * high-definition compressed
+					      * video.
+					      */
+	bfqd->wr_busy_queues = 0;
+
+	/*
+	 * Begin by assuming, optimistically, that the device peak
+	 * rate is equal to 2/3 of the highest reference rate.
+	 */
+	bfqd->rate_dur_prod = ref_rate[blk_queue_nonrot(bfqd->queue)] *
+		ref_wr_duration[blk_queue_nonrot(bfqd->queue)];
+	bfqd->peak_rate = ref_rate[blk_queue_nonrot(bfqd->queue)] * 2 / 3;
+
+	/* see comments on the definition of next field inside bfq_data */
+	bfqd->actuator_load_threshold = 4;
+
+	spin_lock_init(&bfqd->lock);
+
+	/*
+	 * The invocation of the next bfq_create_group_hierarchy
+	 * function is the head of a chain of function calls
+	 * (bfq_create_group_hierarchy->blkcg_activate_policy->
+	 * blk_mq_freeze_queue) that may lead to the invocation of the
+	 * has_work hook function. For this reason,
+	 * bfq_create_group_hierarchy is invoked only after all
+	 * scheduler data has been initialized, apart from the fields
+	 * that can be initialized only after invoking
+	 * bfq_create_group_hierarchy. This, in particular, enables
+	 * has_work to correctly return false. Of course, to avoid
+	 * other inconsistencies, the blk-mq stack must then refrain
+	 * from invoking further scheduler hooks before this init
+	 * function is finished.
+	 */
+	bfqd->root_group = bfq_create_group_hierarchy(bfqd, q->node);
+	if (!bfqd->root_group)
+		goto out_free;
+	bfq_init_root_group(bfqd->root_group, bfqd);
+	bfq_init_entity(&bfqd->oom_bfqq.entity, bfqd->root_group);
+
+	/* We dispatch from request queue wide instead of hw queue */
+	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
+
+	set_bit(ELEVATOR_FLAG_DISABLE_WBT, &eq->flags);
+	wbt_disable_default(q->disk);
+	blk_stat_enable_accounting(q);
+
+	return 0;
+
+out_free:
+	kfree(bfqd);
+	kobject_put(&eq->kobj);
+	return -ENOMEM;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
 static struct elevator_type mq_deadline = {                                        // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L1077
 	.ops = {
 		.depth_updated		= dd_depth_updated,
@@ -1074,6 +1326,60 @@ static int dd_request_merge(struct request_queue *q, struct request **rq,       
 
 	return ELEVATOR_NO_MERGE;
 }
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * initialize elevator private data (deadline_data).
+ */
+/*
+* инициализация личных данных лифта (deadline_data).
+*/
+static int dd_init_sched(struct request_queue *q, struct elevator_type *e)              // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L571
+{
+	struct deadline_data *dd;
+	struct elevator_queue *eq;
+	enum dd_prio prio;
+	int ret = -ENOMEM;
+
+	eq = elevator_alloc(q, e);
+	if (!eq)
+		return ret;
+
+	dd = kzalloc_node(sizeof(*dd), GFP_KERNEL, q->node);
+	if (!dd)
+		goto put_eq;
+
+	eq->elevator_data = dd;
+
+	for (prio = 0; prio <= DD_PRIO_MAX; prio++) {
+		struct dd_per_prio *per_prio = &dd->per_prio[prio];
+
+		INIT_LIST_HEAD(&per_prio->dispatch);
+		INIT_LIST_HEAD(&per_prio->fifo_list[DD_READ]);
+		INIT_LIST_HEAD(&per_prio->fifo_list[DD_WRITE]);
+		per_prio->sort_list[DD_READ] = RB_ROOT;
+		per_prio->sort_list[DD_WRITE] = RB_ROOT;
+	}
+	dd->fifo_expire[DD_READ] = read_expire;
+	dd->fifo_expire[DD_WRITE] = write_expire;
+	dd->writes_starved = writes_starved;
+	dd->front_merges = 1;
+	dd->last_dir = DD_WRITE;
+	dd->fifo_batch = fifo_batch;
+	dd->prio_aging_expire = prio_aging_expire;
+	spin_lock_init(&dd->lock);
+
+	/* We dispatch from request queue wide instead of hw queue */
+	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
+
+	q->elevator = eq;
+	return 0;
+
+put_eq:
+	kobject_put(&eq->kobj);
+	return ret;
+}
+
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
 struct kobject {
 	const char		*name;
