@@ -989,8 +989,27 @@ static struct elevator_type iosched_bfq_mq = {                                  
 	.elevator_owner =	THIS_MODULE,
 };
 
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+static int bfq_request_merge(struct request_queue *q, struct request **req,        // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L2485
+			     struct bio *bio)
+{
+	struct bfq_data *bfqd = q->elevator->elevator_data;
+	struct request *__rq;
+
+	__rq = bfq_find_rq_fmerge(bfqd, bio, q);
+	if (__rq && elv_bio_merge_ok(__rq, bio)) {
+		*req = __rq;
+
+		if (blk_discard_mergable(__rq))
+			return ELEVATOR_DISCARD_MERGE;
+		return ELEVATOR_FRONT_MERGE;
+	}
+
+	return ELEVATOR_NO_MERGE;
+}
+
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
-static struct elevator_type mq_deadline = {
+static struct elevator_type mq_deadline = {                                        // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L1077
 	.ops = {
 		.depth_updated		= dd_depth_updated,
 		.limit_depth		= dd_limit_depth,
@@ -1019,6 +1038,42 @@ static struct elevator_type mq_deadline = {
 	.elevator_owner = THIS_MODULE,
 };
 
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * Try to merge @bio into an existing request. If @bio has been merged into
+ * an existing request, store the pointer to that request into *@rq.
+ */
+/*
+* Попробуйте объединить @bio с существующим запросом. Если @bio был объединен с
+* существующим запросом, сохраните указатель на этот запрос в *@rq.
+*/
+static int dd_request_merge(struct request_queue *q, struct request **rq,            // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L621
+			    struct bio *bio)
+{
+	struct deadline_data *dd = q->elevator->elevator_data;
+	const u8 ioprio_class = IOPRIO_PRIO_CLASS(bio->bi_ioprio);
+	const enum dd_prio prio = ioprio_class_to_prio[ioprio_class];
+	struct dd_per_prio *per_prio = &dd->per_prio[prio];
+	sector_t sector = bio_end_sector(bio);
+	struct request *__rq;
+
+	if (!dd->front_merges)
+		return ELEVATOR_NO_MERGE;
+
+	__rq = elv_rb_find(&per_prio->sort_list[bio_data_dir(bio)], sector);
+	if (__rq) {
+		BUG_ON(sector != blk_rq_pos(__rq));
+
+		if (elv_bio_merge_ok(__rq, bio)) {
+			*rq = __rq;
+			if (blk_discard_mergable(__rq))
+				return ELEVATOR_DISCARD_MERGE;
+			return ELEVATOR_FRONT_MERGE;
+		}
+	}
+
+	return ELEVATOR_NO_MERGE;
+}
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
 struct kobject {
 	const char		*name;
