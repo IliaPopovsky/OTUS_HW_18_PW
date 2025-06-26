@@ -26,8 +26,8 @@ struct bio {                                                                    
 	struct bio		*bi_next;	/* request queue link */  /* combines several BIOs in a singly linked list associated with a request */ 
 	                                                                 /* объединяет несколько BIO в односвязный список, связанный с запросом */
 	struct block_device	*bi_bdev;      /* is a pointer to the block device data structure of the device to which the request belongs */
-	                                      /* — указатель на структуру данных блочного устройства, к которому относится запрос */
-	blk_opf_t		bi_opf;		/* bottom bits REQ_OP, top bits
+	                                      /* указатель на структуру данных блочного устройства, к которому относится запрос */
+	blk_opf_t		bi_opf;	/* bottom bits REQ_OP, top bits
 						 * req_flags.
 						 */
 	unsigned short		bi_flags;	/* BIO_* below */
@@ -63,6 +63,12 @@ struct bio {                                                                    
 	 * not have a request_queue associated with it.  The reference is put
 	 * on release of the bio.
 	 */
+	/*
+	 * Представляет связь css и request_queue для bio.
+	 * Если bio отправляется напрямую на устройство, она не будет иметь blkg, поскольку она
+	 * не будет иметь request_queue, связанного с ней. Ссылка помещается
+	 * при выпуске bio.
+	 */
 	struct blkcg_gq		*bi_blkg;
 	struct bio_issue	bi_issue;
 #ifdef CONFIG_BLK_CGROUP_IOCOST
@@ -80,17 +86,17 @@ struct bio {                                                                    
 #endif
 	};
 
-	unsigned short		bi_vcnt;	/* how many bio_vec's */
+	unsigned short		bi_vcnt;	/* how many bio_vec's */    /* сколько bio_vec */
 
 	/*
 	 * Everything starting with bi_max_vecs will be preserved by bio_reset()
 	 */
 
-	unsigned short		bi_max_vecs;	/* max bvl_vecs we can hold */
+	unsigned short		bi_max_vecs;	/* max bvl_vecs we can hold */    /* максимальное количество bvl_vecs, которое мы можем удерживать */
 
 	atomic_t		__bi_cnt;	/* pin count */
 
-	struct bio_vec		*bi_io_vec;	/* the actual vec list */
+	struct bio_vec		*bi_io_vec;	/* the actual vec list */        /* фактический список векторов */
 
 	struct bio_set		*bi_pool;
 
@@ -98,6 +104,11 @@ struct bio {                                                                    
 	 * We can inline a number of vecs at the end of the bio, to avoid
 	 * double allocations for a small number of bio_vecs. This member
 	 * MUST obviously be kept at the very end of the bio.
+	 */
+	/*
+	 * Мы можем встроить несколько векторов в конец bio, чтобы избежать
+	 * двойного выделения памяти для небольшого количества bio_vecs. Этот член
+	 * ДОЛЖЕН, очевидно, храниться в самом конце bio.
 	 */
 	struct bio_vec		bi_inline_vecs[];
 };
@@ -115,18 +126,18 @@ struct bio {                                                                    
  *
  * This holds because page_is_mergeable() checks the above property.
  */
- /**
-* struct bio_vec — непрерывный диапазон адресов физической памяти
-* @bv_page: Первая страница, связанная с диапазоном адресов.
-* @bv_len: Количество байтов в диапазоне адресов.
-* @bv_offset: Начало диапазона адресов относительно начала @bv_page.
-*
-* Следующее справедливо для bvec, если n * PAGE_SIZE < bv_offset + bv_len:
-*
-* nth_page(@bv_page, n) == @bv_page + n
-*
-* Это справедливо, поскольку page_is_mergeable() проверяет указанное выше свойство.
-*/
+/**
+ * struct bio_vec — непрерывный диапазон адресов физической памяти
+ * @bv_page: Первая страница, связанная с диапазоном адресов.
+ * @bv_len: Количество байтов в диапазоне адресов.
+ * @bv_offset: Начало диапазона адресов относительно начала @bv_page.
+ *
+ * Следующее справедливо для bvec, если n * PAGE_SIZE < bv_offset + bv_len:
+ *
+ * nth_page(@bv_page, n) == @bv_page + n
+ *
+ * Это справедливо, поскольку page_is_mergeable() проверяет указанное выше свойство.
+ */
 /*
 bv_page points to the page instance of the page used for data transfer. bv_offset indicates the     // Wolfgang Mauerer "Professional Linux Kernel Architecture"
 offset within the page; typically this value is 0 because page boundaries are normally used as
@@ -134,7 +145,7 @@ boundaries for I/O operations.
 len specifies the number of bytes used for the data if the whole page is not filled.
 */
 /*
-bv_page указывает на экземпляр страницы, используемой для передачи данных. bv_offset указывает смещение внутри страницы; обычно это значение равно 0, 
+bv_page указывает на экземпляр страницы, используемой для передачи данных (с устройства и на устройство). bv_offset указывает смещение внутри страницы; обычно это значение равно 0, 
 поскольку границы страницы обычно используются как границы для операций ввода-вывода.
 len указывает количество байтов, используемых для данных, если вся страница не заполнена.
 */
@@ -302,11 +313,11 @@ struct page {                                                                  /
  * Returns the page's virtual address.
  */
 /**
-* page_address - получить сопоставленный виртуальный адрес страницы
-* @page: &struct page для получения виртуального адреса
-*
-* Возвращает виртуальный адрес страницы.
-*/
+ * page_address - получить сопоставленный виртуальный адрес страницы
+ * @page: &struct page для получения виртуального адреса
+ *
+ * Возвращает виртуальный адрес страницы.
+ */
 void *page_address(const struct page *page)                             //  https://elixir.bootlin.com/linux/v6.11/source/mm/highmem.c#L753
 {
 	unsigned long flags;
@@ -335,19 +346,17 @@ void *page_address(const struct page *page)                             //  http
 }
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
-struct bvec_iter {
-	sector_t		bi_sector;	/* device address in 512 byte
-						   sectors */
-	unsigned int		bi_size;	/* residual I/O count */
+struct bvec_iter {                                                                          // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bvec.h#L77
+	sector_t		bi_sector;	/* device address in 512 byte sectors */          /* адрес устройства в секторах по 512 байт */
+	unsigned int		bi_size;	/* residual I/O count */                          /* остаточное количество операций ввода-вывода */
 
-	unsigned int		bi_idx;		/* current index into bvl_vec */
+	unsigned int		bi_idx;		/* current index into bvl_vec */          /* текущий индекс в bvl_vec */
 
-	unsigned int            bi_bvec_done;	/* number of bytes completed in
-						   current bvec */
+	unsigned int            bi_bvec_done;	/* number of bytes completed in current bvec */   /* количество байтов, завершенных в текущем bvec */
 } __packed __aligned(4);
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
-struct block_device_operations {                                                             https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1470
+struct block_device_operations {                                                            // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1470
 	void (*submit_bio)(struct bio *bio);
 	int (*poll_bio)(struct bio *bio, struct io_comp_batch *iob,
 			unsigned int flags);
@@ -363,12 +372,12 @@ struct block_device_operations {                                                
 	int (*getgeo)(struct block_device *, struct hd_geometry *);
 	int (*set_read_only)(struct block_device *bdev, bool ro);
 	void (*free_disk)(struct gendisk *disk);
-	/* this callback is with swap_lock and sometimes page table lock held */
+	/* this callback is with swap_lock and sometimes page table lock held */       /* этот обратный вызов выполняется с блокировкой swap_lock и иногда с блокировкой таблицы страниц */
 	void (*swap_slot_free_notify) (struct block_device *, unsigned long);
 	int (*report_zones)(struct gendisk *, sector_t sector,
 			unsigned int nr_zones, report_zones_cb cb, void *data);
 	char *(*devnode)(struct gendisk *disk, umode_t *mode);
-	/* returns the length of the identifier or a negative errno: */
+	/* returns the length of the identifier or a negative errno: */                /* возвращает длину идентификатора или отрицательное значение errno: */
 	int (*get_unique_id)(struct gendisk *disk, u8 id[16],
 			enum blk_unique_id id_type);
 	struct module *owner;
@@ -378,6 +387,10 @@ struct block_device_operations {                                                
 	 * Special callback for probing GPT entry at a given sector.
 	 * Needed by Android devices, used by GPT scanner and MMC blk
 	 * driver.
+	 */
+	/*
+	 * Специальный обратный вызов для проверки записи GPT в заданном секторе.
+	 * Требуется для устройств Android, используется сканером GPT и драйвером MMC blk.
 	 */
 	int (*alternative_gpt_sector)(struct gendisk *disk, sector_t *sector);
 };
