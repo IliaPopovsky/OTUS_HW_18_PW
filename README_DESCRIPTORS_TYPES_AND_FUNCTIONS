@@ -706,7 +706,7 @@ struct request {                                              // https://elixir.
 
 	/* the following two fields are internal, NEVER access directly */
 	unsigned int __data_len;	/* total data len */
-	sector_t __sector;		/* sector cursor */
+	sector_t __sector;		/* sector cursor */   /* курсор сектора */
 
 	struct bio *bio;
 	struct bio *biotail;
@@ -961,8 +961,8 @@ struct request_queue {
  * each queue has an elevator_queue associated with it
  */
 /*
-* каждая очередь имеет лифтовую_очередь, связанную с ней
-*/
+ * каждая очередь имеет лифтовую_очередь, связанную с ней
+ */
 struct elevator_queue                                                               // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L113
 {
 	struct elevator_type *type;
@@ -978,8 +978,8 @@ struct elevator_queue                                                           
  * identifies an elevator type, such as AS or deadline
  */
 /*
-* определяет тип лифта, например AS или deadline
-*/
+ * определяет тип лифта, например AS или deadline
+ */
 /*
  Вот краткое описание основных планировщиков I/O в Linux: 
  CFQ (Completely Fair Queuing):
@@ -1413,3 +1413,62 @@ struct kobject {
 	struct delayed_work	release;
 #endif
 };
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * blk_rq_pos()			: the current sector
+ */
+/*
+* blk_rq_pos() : текущий сектор
+*/
+static inline sector_t blk_rq_pos(const struct request *rq)                             // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L1065
+{
+	return rq->__sector;
+}
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+#define rq_for_each_segment(bvl, _rq, _iter)			\                         // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L1045
+	__rq_for_each_bio(_iter.bio, _rq)			\
+		bio_for_each_segment(bvl, _iter.bio, _iter.iter)   
+		
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+#define __rq_for_each_bio(_bio, rq)	\                                                // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L1041
+	if ((rq->bio))			\
+		for (_bio = (rq)->bio; _bio; _bio = _bio->bi_next)  
+		
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+#define bio_for_each_segment(bvl, bio, iter)				\                 // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bio.h#L151
+	__bio_for_each_segment(bvl, bio, iter, (bio)->bi_iter)
+                   
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+#define __bio_for_each_segment(bvl, bio, iter, start)			\         // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bio.h#L145
+	for (iter = (start);						\
+	     (iter).bi_size &&						\
+		((bvl = bio_iter_iovec((bio), (iter))), 1);		\
+	     bio_advance_iter_single((bio), &(iter), (bvl).bv_len))
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+#define bio_iter_iovec(bio, iter)				\                        // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bio.h#L25
+	bvec_iter_bvec((bio)->bi_io_vec, (iter))	
+	
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+#define bvec_iter_bvec(bvec, iter)				\                        // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bvec.h#L133
+((struct bio_vec) {						\
+	.bv_page	= bvec_iter_page((bvec), (iter)),	\
+	.bv_len		= bvec_iter_len((bvec), (iter)),	\
+	.bv_offset	= bvec_iter_offset((bvec), (iter)),	\
+})    
+
+---------------------------------------------------------------------------------------------------------------------------------------------------------
+/* @bytes should be less or equal to bvec[i->bi_idx].bv_len */          /* @bytes должен быть меньше или равен bvec[i->bi_idx].bv_len */
+static inline void bio_advance_iter_single(const struct bio *bio,                     // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bio.h#L111
+					   struct bvec_iter *iter,
+					   unsigned int bytes)
+{
+	iter->bi_sector += bytes >> 9;
+
+	if (bio_no_advance_iter(bio))
+		iter->bi_size -= bytes;
+	else
+		bvec_iter_advance_single(bio->bi_io_vec, iter, bytes);
+}

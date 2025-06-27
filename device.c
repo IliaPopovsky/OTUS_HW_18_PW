@@ -58,8 +58,8 @@ static inline int process_request(struct request *rq, unsigned int *nr_bytes)
         /*
 	 * blk_rq_pos() : текущий сектор
 	 */
-	loff_t pos = blk_rq_pos(rq) << SECTOR_SHIFT;
-	loff_t dev_size = (dev->capacity << SECTOR_SHIFT);
+	loff_t pos = blk_rq_pos(rq) << SECTOR_SHIFT;                             // #define SECTOR_SHIFT 9 in https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L31
+	loff_t dev_size = (dev->capacity << SECTOR_SHIFT);                       // typedef long long	__kernel_loff_t;  typedef __kernel_loff_t		loff_t;
 
 	rq_for_each_segment(bvec, rq, iter) {
 		unsigned long len = bvec.bv_len;
