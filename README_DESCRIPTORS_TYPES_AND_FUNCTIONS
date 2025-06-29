@@ -114,6 +114,48 @@ struct bio {                                                                    
 };
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
+struct block_device {                                                                 // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L41
+	sector_t		bd_start_sect;
+	sector_t		bd_nr_sectors;
+	struct gendisk *	bd_disk;
+	struct request_queue *	bd_queue;
+	struct disk_stats __percpu *bd_stats;
+	unsigned long		bd_stamp;
+	atomic_t		__bd_flags;	// partition number + flags    // номер раздела + флаги
+#define BD_PARTNO		255	// lower 8 bits; assign-once           // нижние 8 бит; присваиваем один раз
+#define BD_READ_ONLY		(1u<<8) // read-only policy                    // политика только для чтения
+#define BD_WRITE_HOLDER		(1u<<9)
+#define BD_HAS_SUBMIT_BIO	(1u<<10)
+#define BD_RO_WARNED		(1u<<11)
+#ifdef CONFIG_FAIL_MAKE_REQUEST
+#define BD_MAKE_IT_FAIL		(1u<<12)
+#endif
+	dev_t			bd_dev;
+	struct address_space	*bd_mapping;	/* page cache */     /* кэш страницы */
+
+	atomic_t		bd_openers;
+	spinlock_t		bd_size_lock; /* for bd_inode->i_size updates */
+	void *			bd_claiming;
+	void *			bd_holder;
+	const struct blk_holder_ops *bd_holder_ops;
+	struct mutex		bd_holder_lock;
+	int			bd_holders;
+	struct kobject		*bd_holder_dir;
+
+	atomic_t		bd_fsfreeze_count; /* number of freeze requests */   /* количество запросов на заморозку */
+	struct mutex		bd_fsfreeze_mutex; /* serialize freeze/thaw */       /* сериализация заморозки/разморозки */
+
+	struct partition_meta_info *bd_meta_info;
+	int			bd_writers;
+	/*
+	 * keep this out-of-line as it's both big and not needed in the fast path
+	 */
+	/*
+	 * держите это отдельно, так как это и большое, и не нужно в быстром пути
+	 */
+	struct device		bd_device;
+} __randomize_layout;
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
 /**
  * struct bio_vec - a contiguous range of physical memory addresses
  * @bv_page:   First page associated with the address range.
@@ -354,6 +396,103 @@ struct bvec_iter {                                                              
 
 	unsigned int            bi_bvec_done;	/* number of bytes completed in current bvec */   /* количество байтов, завершенных в текущем bvec */
 } __packed __aligned(4);
+
+------------------------------------------------------------------------------------------------------------------------------------------------------------
+struct gendisk {                                                                           // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L141
+	/*
+	 * major/first_minor/minors should not be set by any new driver, the
+	 * block core will take care of allocating them automatically.
+	 */
+	/*
+	 * major/first_minor/minors не должны устанавливаться никаким новым драйвером,
+	 * ядро ​​блока позаботится об их выделении автоматически.
+	 */
+	int major;
+	int first_minor;
+	int minors;
+
+	char disk_name[DISK_NAME_LEN];	/* name of major driver */              /* имя основного драйвера */
+
+	unsigned short events;		/* supported events */                         /* поддерживаемые события */
+	unsigned short event_flags;	/* flags related to event processing */        /* флаги, связанные с обработкой событий */
+
+	struct xarray part_tbl;
+	struct block_device *part0;
+
+	const struct block_device_operations *fops;
+	struct request_queue *queue;
+	void *private_data;
+
+	struct bio_set bio_split;
+
+	int flags;
+	unsigned long state;
+#define GD_NEED_PART_SCAN		0
+#define GD_READ_ONLY			1
+#define GD_DEAD				2
+#define GD_NATIVE_CAPACITY		3
+#define GD_ADDED			4
+#define GD_SUPPRESS_PART_SCAN		5
+#define GD_OWNS_QUEUE			6
+
+	struct mutex open_mutex;	/* open/close mutex */                         /* открыть/закрыть мьютекс */
+	unsigned open_partitions;	/* number of open partitions */                /* количество открытых разделов */
+
+	struct backing_dev_info	*bdi;
+	struct kobject queue_kobj;	/* the queue/ directory */                     /* очередь/ каталог */
+	struct kobject *slave_dir;
+#ifdef CONFIG_BLOCK_HOLDER_DEPRECATED
+	struct list_head slave_bdevs;
+#endif
+	struct timer_rand_state *random;
+	atomic_t sync_io;		/* RAID */
+	struct disk_events *ev;
+
+#ifdef CONFIG_BLK_DEV_ZONED
+	/*
+	 * Zoned block device information. Reads of this information must be
+	 * protected with blk_queue_enter() / blk_queue_exit(). Modifying this
+	 * information is only allowed while no requests are being processed.
+	 * See also blk_mq_freeze_queue() and blk_mq_unfreeze_queue().
+	 */
+	/*
+	 * Информация о зонированном блочном устройстве. Чтение этой информации должно быть
+	 * защищено с помощью blk_queue_enter() / blk_queue_exit(). Изменение этой
+	 * информации разрешено только при отсутствии обрабатываемых запросов.
+	 * См. также blk_mq_freeze_queue() и blk_mq_unfreeze_queue().
+	 */
+	unsigned int		nr_zones;
+	unsigned int		zone_capacity;
+	unsigned int		last_zone_capacity;
+	unsigned long		*conv_zones_bitmap;
+	unsigned int            zone_wplugs_hash_bits;
+	spinlock_t              zone_wplugs_lock;
+	struct mempool_s	*zone_wplugs_pool;
+	struct hlist_head       *zone_wplugs_hash;
+	struct list_head        zone_wplugs_err_list;
+	struct work_struct	zone_wplugs_work;
+	struct workqueue_struct *zone_wplugs_wq;
+#endif /* CONFIG_BLK_DEV_ZONED */
+
+#if IS_ENABLED(CONFIG_CDROM)
+	struct cdrom_device_info *cdi;
+#endif
+	int node_id;
+	struct badblocks *bb;
+	struct lockdep_map lockdep_map;
+	u64 diskseq;
+	blk_mode_t open_mode;
+
+	/*
+	 * Independent sector access ranges. This is always NULL for
+	 * devices that do not have multiple independent access ranges.
+	 */
+	/*
+	 * Независимые диапазоны доступа к секторам. Это всегда NULL для
+	 * устройств, которые не имеют нескольких независимых диапазонов доступа.
+	 */
+	struct blk_independent_access_ranges *ia_ranges;
+};
 
 ------------------------------------------------------------------------------------------------------------------------------------------------------------
 struct block_device_operations {                                                            // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blkdev.h#L1470
