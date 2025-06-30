@@ -115,7 +115,7 @@ struct bio {                                                                    
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
 struct block_device {                                                                 // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L41
-	sector_t		bd_start_sect;
+	sector_t		bd_start_sect;                                 // typedef u64 sector_t;  in https://elixir.bootlin.com/linux/v6.11/source/include/linux/types.h#L134
 	sector_t		bd_nr_sectors;
 	struct gendisk *	bd_disk;
 	struct request_queue *	bd_queue;
@@ -1410,6 +1410,45 @@ out_free:
 	kfree(bfqd);
 	kobject_put(&eq->kobj);
 	return -ENOMEM;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+static void bfq_exit_queue(struct elevator_queue *e)                                          // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L7140
+{
+	struct bfq_data *bfqd = e->elevator_data;
+	struct bfq_queue *bfqq, *n;
+	unsigned int actuator;
+
+	hrtimer_cancel(&bfqd->idle_slice_timer);
+
+	spin_lock_irq(&bfqd->lock);
+	list_for_each_entry_safe(bfqq, n, &bfqd->idle_list, bfqq_list)
+		bfq_deactivate_bfqq(bfqd, bfqq, false, false);
+	spin_unlock_irq(&bfqd->lock);
+
+	for (actuator = 0; actuator < bfqd->num_actuators; actuator++)
+		WARN_ON_ONCE(bfqd->rq_in_driver[actuator]);
+	WARN_ON_ONCE(bfqd->tot_rq_in_driver);
+
+	hrtimer_cancel(&bfqd->idle_slice_timer);
+
+	/* release oom-queue reference to root group */
+	bfqg_and_blkg_put(bfqd->root_group);
+
+#ifdef CONFIG_BFQ_GROUP_IOSCHED
+	blkcg_deactivate_policy(bfqd->queue->disk, &blkcg_policy_bfq);
+#else
+	spin_lock_irq(&bfqd->lock);
+	bfq_put_async_queues(bfqd, bfqd->root_group);
+	kfree(bfqd->root_group);
+	spin_unlock_irq(&bfqd->lock);
+#endif
+
+	blk_stat_disable_accounting(bfqd->queue);
+	clear_bit(ELEVATOR_FLAG_DISABLE_WBT, &e->flags);
+	wbt_enable_default(bfqd->queue->disk);
+
+	kfree(bfqd);
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
