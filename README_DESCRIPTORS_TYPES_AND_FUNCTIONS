@@ -1432,7 +1432,7 @@ static void bfq_exit_queue(struct elevator_queue *e)                            
 
 	hrtimer_cancel(&bfqd->idle_slice_timer);
 
-	/* release oom-queue reference to root group */
+	/* release oom-queue reference to root group */   /* освободить ссылку oom-queue на корневую группу */
 	bfqg_and_blkg_put(bfqd->root_group);
 
 #ifdef CONFIG_BFQ_GROUP_IOSCHED
@@ -1560,7 +1560,7 @@ static int dd_init_sched(struct request_queue *q, struct elevator_type *e)      
 	dd->prio_aging_expire = prio_aging_expire;
 	spin_lock_init(&dd->lock);
 
-	/* We dispatch from request queue wide instead of hw queue */
+	/* We dispatch from request queue wide instead of hw queue */    /* Мы отправляем запросы из очереди запросов, а не из аппаратной очереди */
 	blk_queue_flag_set(QUEUE_FLAG_SQ_SCHED, q);
 
 	q->elevator = eq;
@@ -1712,3 +1712,31 @@ static inline void bio_advance_iter_single(const struct bio *bio,               
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
 #define mp_bvec_iter_offset(bvec, iter)				\           // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bvec.h#L108
 	(__bvec_iter_bvec((bvec), (iter))->bv_offset + (iter).bi_bvec_done)
+	
+	
+==========================================================================================================================================================
+==========================================================================================================================================================
+==========================================================================================================================================================
+struct buffer_head {                                                             // https://elixir.bootlin.com/linux/v6.11/source/include/linux/buffer_head.h#L59
+	unsigned long b_state;		/* buffer state bitmap (see above) */
+	struct buffer_head *b_this_page;/* circular list of page's buffers */
+	union {
+		struct page *b_page;	/* the page this bh is mapped to */
+		struct folio *b_folio;	/* the folio this bh is mapped to */
+	};
+
+	sector_t b_blocknr;		/* start block number */
+	size_t b_size;			/* size of mapping */
+	char *b_data;			/* pointer to data within the page */
+
+	struct block_device *b_bdev;
+	bh_end_io_t *b_end_io;		/* I/O completion */
+ 	void *b_private;		/* reserved for b_end_io */
+	struct list_head b_assoc_buffers; /* associated with another mapping */
+	struct address_space *b_assoc_map;	/* mapping this buffer is
+						   associated with */
+	atomic_t b_count;		/* users using this buffer_head */
+	spinlock_t b_uptodate_lock;	/* Used by the first bh in a page, to
+					 * serialise IO completion of other
+					 * buffers in the page */
+};
