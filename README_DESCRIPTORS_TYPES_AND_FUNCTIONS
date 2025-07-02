@@ -27,21 +27,21 @@ struct bio {                                                                    
 	                                                                 /* объединяет несколько BIO в односвязный список, связанный с запросом */
 	struct block_device	*bi_bdev;      /* is a pointer to the block device data structure of the device to which the request belongs */
 	                                      /* указатель на структуру данных блочного устройства, к которому относится запрос */
-	blk_opf_t		bi_opf;	/* bottom bits REQ_OP, top bits
+	blk_opf_t		bi_opf;	/* bottom bits REQ_OP, top bits   // typedef __u32 __bitwise blk_opf_t; in https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L202
 						 * req_flags.
 						 */
 	unsigned short		bi_flags;	/* BIO_* below */
 	unsigned short		bi_ioprio;
 	enum rw_hint		bi_write_hint;
-	blk_status_t		bi_status;
+	blk_status_t		bi_status;               // typedef u8 __bitwise blk_status_t; in https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L93
 	atomic_t		__bi_remaining;
 
 	struct bvec_iter	bi_iter;
 
 	union {
-		/* for polled bios: */
-		blk_qc_t		bi_cookie;
-		/* for plugged zoned writes only: */
+		/* for polled bios: */    /* для опрашиваемых биосов: */
+		blk_qc_t		bi_cookie;       // typedef unsigned int blk_qc_t; in  https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk_types.h#L204
+		/* for plugged zoned writes only: */    /* только для подключенных зонных записей: */
 		unsigned int		__bi_nr_segments;
 	};
 	/*
@@ -111,6 +111,65 @@ struct bio {                                                                    
 	 * ДОЛЖЕН, очевидно, храниться в самом конце bio.
 	 */
 	struct bio_vec		bi_inline_vecs[];
+};
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+/* Block storage write lifetime hint values. */   /* Значения подсказок для записи времени жизни блочного хранилища. */ 
+enum rw_hint {                                                // https://elixir.bootlin.com/linux/v6.11/source/include/linux/rw_hint.h#L10
+	WRITE_LIFE_NOT_SET	= RWH_WRITE_LIFE_NOT_SET,
+	WRITE_LIFE_NONE		= RWH_WRITE_LIFE_NONE,
+	WRITE_LIFE_SHORT	= RWH_WRITE_LIFE_SHORT,
+	WRITE_LIFE_MEDIUM	= RWH_WRITE_LIFE_MEDIUM,
+	WRITE_LIFE_LONG		= RWH_WRITE_LIFE_LONG,
+	WRITE_LIFE_EXTREME	= RWH_WRITE_LIFE_EXTREME,
+} __packed;
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * bio_set is used to allow other portions of the IO system to
+ * allocate their own private memory pools for bio and iovec structures.
+ * These memory pools in turn all allocate from the bio_slab
+ * and the bvec_slabs[].
+ */
+/*
+* bio_set используется для того, чтобы другие части системы ввода-вывода могли
+* выделять свои собственные пулы памяти для структур bio и iovec.
+* Эти пулы памяти, в свою очередь, выделяются из bio_slab
+* и bvec_slabs[].
+*/
+
+#define BIO_POOL_SIZE 2
+
+struct bio_set {                                                         // https://elixir.bootlin.com/linux/v6.11/source/include/linux/bio.h#L624
+	struct kmem_cache *bio_slab;
+	unsigned int front_pad;
+
+	/*
+	 * per-cpu bio alloc cache
+	 */
+	struct bio_alloc_cache __percpu *cache;
+
+	mempool_t bio_pool;
+	mempool_t bvec_pool;
+#if defined(CONFIG_BLK_DEV_INTEGRITY)
+	mempool_t bio_integrity_pool;
+	mempool_t bvec_integrity_pool;
+#endif
+
+	unsigned int back_pad;
+	/*
+	 * Deadlock avoidance for stacking block drivers: see comments in
+	 * bio_alloc_bioset() for details
+	 */
+	spinlock_t		rescue_lock;
+	struct bio_list		rescue_list;
+	struct work_struct	rescue_work;
+	struct workqueue_struct	*rescue_workqueue;
+
+	/*
+	 * Hot un-plug notifier for the per-cpu cache, if used
+	 */
+	struct hlist_node cpuhp_dead;
 };
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -830,7 +889,7 @@ struct blk_mq_ops {                                                             
 *
 * Если вы измените эту структуру, обязательно обновите blk_rq_init() и особенно blk_mq_rq_ctx_init(), чтобы позаботиться о добавленных полях.
 */
-struct request {                                              // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L102
+struct request {                                                              // https://elixir.bootlin.com/linux/v6.11/source/include/linux/blk-mq.h#L102
 	struct request_queue *q;
 	struct blk_mq_ctx *mq_ctx;
 	struct blk_mq_hw_ctx *mq_hctx;
@@ -1102,7 +1161,7 @@ struct request_queue {
 /*
  * каждая очередь имеет лифтовую_очередь, связанную с ней
  */
-struct elevator_queue                                                               // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L113
+struct elevator_queue                                                                     // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L113
 {
 	struct elevator_type *type;
 	void *elevator_data;
@@ -1131,7 +1190,7 @@ struct elevator_queue                                                           
  Простой планировщик, который просто выполняет операции ввода-вывода в том порядке, в котором они поступают. Он эффективен для твердотельных накопителей (SSD) и устройств, где нет механических
  задержек.
 */ 
-struct elevator_type                                                               // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L64
+struct elevator_type                                                                      // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L64
 {
 	/* managed by elevator core */     /* управляется ядром лифта */
 	struct kmem_cache *icq_cache;
@@ -1156,7 +1215,7 @@ struct elevator_type                                                            
 };
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
-struct elevator_mq_ops {                                                           // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L26
+struct elevator_mq_ops {                                                                   // https://elixir.bootlin.com/linux/v6.11/source/block/elevator.h#L26
 	int (*init_sched)(struct request_queue *, struct elevator_type *);
 	void (*exit_sched)(struct elevator_queue *);
 	int (*init_hctx)(struct blk_mq_hw_ctx *, unsigned int);
@@ -1184,7 +1243,7 @@ struct elevator_mq_ops {                                                        
 };
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
-static struct elevator_type iosched_bfq_mq = {                                       // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L7611
+static struct elevator_type iosched_bfq_mq = {                                                // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L7611
 	.ops = {
 		.limit_depth		= bfq_limit_depth,
 		.prepare_request	= bfq_prepare_request,
@@ -1215,7 +1274,7 @@ static struct elevator_type iosched_bfq_mq = {                                  
 };
 
 -----------------------------------------------------------------------------------------------------------------------------------------------------------
-static int bfq_request_merge(struct request_queue *q, struct request **req,        // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L2485
+static int bfq_request_merge(struct request_queue *q, struct request **req,                      // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L2485
 			     struct bio *bio)
 {
 	struct bfq_data *bfqd = q->elevator->elevator_data;
@@ -1717,17 +1776,68 @@ static inline void bio_advance_iter_single(const struct bio *bio,               
 ==========================================================================================================================================================
 ==========================================================================================================================================================
 ==========================================================================================================================================================
-struct buffer_head {                                                             // https://elixir.bootlin.com/linux/v6.11/source/include/linux/buffer_head.h#L59
-	unsigned long b_state;		/* buffer state bitmap (see above) */
+enum bh_state_bits {                                                            // https://elixir.bootlin.com/linux/v6.11/source/include/linux/buffer_head.h#L59
+	BH_Uptodate,	/* Contains valid data */
+	BH_Dirty,	/* Is dirty */
+	BH_Lock,	/* Is locked */
+	BH_Req,		/* Has been submitted for I/O */
+
+	BH_Mapped,	/* Has a disk mapping */
+	BH_New,		/* Disk mapping was newly created by get_block */
+	BH_Async_Read,	/* Is under end_buffer_async_read I/O */
+	BH_Async_Write,	/* Is under end_buffer_async_write I/O */
+	BH_Delay,	/* Buffer is not yet allocated on disk */
+	BH_Boundary,	/* Block is followed by a discontiguity */
+	BH_Write_EIO,	/* I/O error on write */
+	BH_Unwritten,	/* Buffer is allocated on disk but not written */
+	BH_Quiet,	/* Buffer Error Prinks to be quiet */
+	BH_Meta,	/* Buffer contains metadata */
+	BH_Prio,	/* Buffer should be submitted with REQ_PRIO */
+	BH_Defer_Completion, /* Defer AIO completion to workqueue */
+
+	BH_PrivateStart,/* not a state bit, but the first bit available
+			 * for private allocation by other entities
+			 */
+};
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+Каждому блоку нужен собственный буфер. Это область оперативной памяти, в которой ядро сохраняет содержимое блока. Размер буфера блока всегда равен размеру самого блока.
+У каждого буфера блока есть дескриптор "головы буфера", имеющий тип buffer_head. Этот дескриптор содержит всю информацию, необходимую ядру, чтобы знать, как обращаться с данным буфером. Т.о., перед работой с каждым буфером ядро проверяет его "голову".
+Здесь рассотрим несколько полей срутруры buffer_head:
+Поле b_page содержит адрес дескриптора страницы, для страничного кадра, в котором хранится буфер блока. Если страничный кадр находится в верхней памяти (что такое верхняя память????), поле b_data
+содержит смещение буфера блока внутри страницы. В противном случае оно содержит начальный линейный адрес самого буфера блока. Поле b_bdev идентифицирует блочное устройство, использующее голову буфера.
+(Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
+*/  
+/*
+ * Historically, a buffer_head was used to map a single block
+ * within a page, and of course as the unit of I/O through the
+ * filesystem and block layers.  Nowadays the basic I/O unit
+ * is the bio, and buffer_heads are used for extracting block
+ * mappings (via a get_block_t call), for tracking state within
+ * a folio (via a folio_mapping) and for wrapping bio submission
+ * for backward compatibility reasons (e.g. submit_bh).
+ */
+/*
+* Исторически buffer_head использовался для отображения одного блока
+* на странице и, конечно, как единица ввода-вывода через
+* файловую систему и слои блоков. В настоящее время базовой единицей ввода-вывода
+* является bio, а buffer_heads используются для извлечения отображений блоков
+* (через вызов get_block_t), для отслеживания состояния внутри
+* фолио (через folio_mapping) и для упаковки отправки bio
+* по соображениям обратной совместимости (например, submit_bh).
+*/
+struct buffer_head {                                                               // https://elixir.bootlin.com/linux/v6.11/source/include/linux/buffer_head.h#L59
+	unsigned long b_state;		/* buffer state bitmap (see above) */   /* битовая карта состояния буфера (см. выше, т.е. enum bh_state_bits) */
 	struct buffer_head *b_this_page;/* circular list of page's buffers */
 	union {
-		struct page *b_page;	/* the page this bh is mapped to */
+		struct page *b_page;	/* the page this bh is mapped to */     /* страница, к которой привязан этот bh */
 		struct folio *b_folio;	/* the folio this bh is mapped to */
 	};
 
-	sector_t b_blocknr;		/* start block number */
+	sector_t b_blocknr;		/* start block number */                /* номер начального блока */
 	size_t b_size;			/* size of mapping */
-	char *b_data;			/* pointer to data within the page */
+	char *b_data;			/* pointer to data within the page */   /* указатель на данные на странице */
 
 	struct block_device *b_bdev;
 	bh_end_io_t *b_end_io;		/* I/O completion */
