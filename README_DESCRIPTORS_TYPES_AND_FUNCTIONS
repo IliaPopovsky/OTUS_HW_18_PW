@@ -1004,10 +1004,38 @@ struct request {                                                              //
 };
 
 ------------------------------------------------------------------------------------------------------------------------------
-struct list_head {
+struct list_head {                                                    // https://elixir.bootlin.com/linux/v6.11/source/include/linux/types.h#L193
 	struct list_head *next, *prev;
 };
+/*
+Специальная структура, реализующая двунаправленные списки.  (Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
+ */
+------------------------------------------------------------------------------------------------------------------------------
+/*
+ * Circular doubly linked list implementation.
+ *
+ * Some of the internal functions ("__xxx") are useful when
+ * manipulating whole lists rather than single entries, as
+ * sometimes we already know the next/prev entries and we can
+ * generate better code by using them directly rather than
+ * using the generic single-entry routines.
+ */
+/*
+* Реализация кольцевого двусвязного списка.
+*
+* Некоторые внутренние функции ("__xxx") полезны при
+* манипулировании целыми списками, а не отдельными записями, так как
+* иногда мы уже знаем следующие/предыдущие записи и можем
+* сгенерировать лучший код, используя их напрямую, а не
+* используя общие процедуры с одной записью.
+*/
+#define LIST_HEAD_INIT(name) { &(name), &(name) }                 // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
 
+#define LIST_HEAD(name) \
+	struct list_head name = LIST_HEAD_INIT(name)
+/*
+
+*/
 ------------------------------------------------------------------------------------------------------------------------------
 struct request_queue {
 	/*
