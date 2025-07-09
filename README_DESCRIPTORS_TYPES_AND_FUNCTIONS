@@ -1008,7 +1008,9 @@ struct list_head {                                                    // https:/
 	struct list_head *next, *prev;
 };
 /*
-Специальная структура, реализующая двунаправленные списки.  (Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
+Специальная структура, реализующая двунаправленные списки, два поля которой, next и prev, содержат указатели вперед и назад для элемента двунаправленного списка общего назначения. 
+При этом важно отметить, что указатели в полях list_head содержат адреса других полей list_head, а не адреса структур, включающих в себя структуру list_head. 
+(Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
  */
 ------------------------------------------------------------------------------------------------------------------------------
 /*
@@ -1034,7 +1036,8 @@ struct list_head {                                                    // https:/
 #define LIST_HEAD(name) \
 	struct list_head name = LIST_HEAD_INIT(name)
 /*
-
+Новый список создается с помощью макроса LIST_HEAD(list_name). Он объявляет новую переменную с именем list_name, имеющую тип list_head, которая представляет собой пустой первый элемент, резервирующий место для головы нового списка. Кроме того, макрос инициализирует поля next и prev структуры list_head так, что переменная list_name указывает сама на себя.
+(Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
 */
 ------------------------------------------------------------------------------------------------------------------------------
 struct request_queue {
