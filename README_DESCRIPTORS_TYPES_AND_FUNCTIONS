@@ -1175,8 +1175,96 @@ static inline int list_empty(const struct list_head *head)                      
 list_entry(p,t,m) - Возвращает адрес структуры типа t, включающей в себя поле типа list_head с именем m и адресом p.
 (Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
 */
-#define list_entry(ptr, type, member) \                                             // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
+#define list_entry(ptr, type, member) \                                                  // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
 	container_of(ptr, type, member)
+
+------------------------------------------------------------------------------------------------------------------------------
+/**
+ * container_of - cast a member of a structure out to the containing structure
+ * @ptr:	the pointer to the member.
+ * @type:	the type of the container struct this is embedded in.
+ * @member:	the name of the member within the struct.
+ *
+ * WARNING: any const qualifier of @ptr is lost.
+ */
+/**
+ * container_of - преобразовать элемент структуры в содержащую его структуру
+ * @ptr: указатель на элемент.
+ * @type: тип контейнерной структуры, в которую он вложен.
+ * @member: имя элемента внутри структуры.
+ *
+ * ВНИМАНИЕ: любой квалификатор const @ptr теряется.
+ */
+#define container_of(ptr, type, member) ({				\                // https://elixir.bootlin.com/linux/v6.11/source/include/linux/container_of.h#L18
+	void *__mptr = (void *)(ptr);					\
+	static_assert(__same_type(*(ptr), ((type *)0)->member) ||	\
+		      __same_type(*(ptr), void),			\
+		      "pointer type mismatch in container_of()");	\
+	((type *)(__mptr - offsetof(type, member))); })
+	
+------------------------------------------------------------------------------------------------------------------------------
+/**
+ * list_for_each	-	iterate over a list
+ * @pos:	the &struct list_head to use as a loop cursor.
+ * @head:	the head for your list.
+ */
+/**
+ * list_for_each — итерация по списку
+ * @pos: структура list_head для использования в качестве курсора цикла.
+ * @head: заголовок списка.
+*/
+/*
+list_for_each(p,h) - Перебирает элементы списка, заданного адресом h его головы. После каждой итерации p содержит указатель на структуру list_head в очередном элементе.
+(Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
+*/
+#define list_for_each(pos, head) \                                                      // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
+	for (pos = (head)->next; !list_is_head(pos, (head)); pos = pos->next)
+	
+------------------------------------------------------------------------------------------------------------------------------
+/**
+ * list_for_each_entry	-	iterate over list of given type
+ * @pos:	the type * to use as a loop cursor.
+ * @head:	the head for your list.
+ * @member:	the name of the list_head within the struct.
+ */
+/**
+ * list_for_each_entry — перебрать список заданного типа
+ * @pos: тип, * используемый в качестве курсора цикла.
+ * @head: заголовок списка.
+ * @member: имя заголовка списка в структуре.
+ */
+/*
+list_for_each_entry(p,h,m) - Аналогично list_for_each, но здесь возвращается адрес структуры, включающей в себя структуру list_head, а не адрес самой структуры list_head.
+(Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
+*/
+#define list_for_each_entry(pos, head, member)				\              // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
+	for (pos = list_first_entry(head, typeof(*pos), member);	\
+	     !list_entry_is_head(pos, head, member);			\
+	     pos = list_next_entry(pos, member))
+
+------------------------------------------------------------------------------------------------------------------------------
+/**
+ * list_first_entry_or_null - get the first element from a list
+ * @ptr:	the list head to take the element from.
+ * @type:	the type of the struct this is embedded in.
+ * @member:	the name of the list_head within the struct.
+ *
+ * Note that if the list is empty, it returns NULL.
+ */
+/**
+ * list_first_entry_or_null — получить первый элемент списка
+ * @ptr: заголовок списка, из которого следует взять элемент.
+ * @type: тип структуры, в которую встроен этот элемент.
+ * @member: имя заголовка списка в структуре.
+ *
+ * Обратите внимание: если список пуст, возвращается NULL.
+ */
+#define list_first_entry_or_null(ptr, type, member) ({ \                              // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
+	struct list_head *head__ = (ptr); \
+	struct list_head *pos__ = READ_ONCE(head__->next); \
+	pos__ != head__ ? list_entry(pos__, type, member) : NULL; \
+})
+
 ------------------------------------------------------------------------------------------------------------------------------
 struct request_queue {
 	/*
