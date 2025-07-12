@@ -1042,6 +1042,28 @@ struct list_head {                                                    // https:/
 
 ------------------------------------------------------------------------------------------------------------------------------
 /**
+ * INIT_LIST_HEAD - Initialize a list_head structure
+ * @list: list_head structure to be initialized.
+ *
+ * Initializes the list_head to point to itself.  If it is a list header,
+ * the result is an empty list.
+ */
+/**
+ * INIT_LIST_HEAD - Инициализация структуры list_head
+ * @list: структура list_head, которую необходимо инициализировать.
+ *
+ * Инициализирует list_head так, чтобы он указывал на себя. Если это заголовок списка,
+ * результатом будет пустой список.
+*/
+
+static inline void INIT_LIST_HEAD(struct list_head *list)
+{
+	WRITE_ONCE(list->next, list);
+	WRITE_ONCE(list->prev, list);
+}
+
+------------------------------------------------------------------------------------------------------------------------------
+/**
  * list_add - add a new entry
  * @new: new entry to be added
  * @head: list head to add it after
@@ -1130,7 +1152,7 @@ static inline void list_add_tail(struct list_head *new, struct list_head *head) 
 * Примечание: list_empty() для записи не возвращает true, после этого запись находится в неопределённом состоянии.
 */
 /*
-Удаляет элемент, на который указывает p. Задавать голову списка нет необходимости.
+list_del(p) - Удаляет элемент, на который указывает p. Задавать голову списка нет необходимости.
 (Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
 */
 static inline void list_del(struct list_head *entry)                                   // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
@@ -1150,7 +1172,7 @@ static inline void list_del(struct list_head *entry)                            
 * @head: список для проверки.
 */
 /*
-Проверяет, пуст ли список, задаваемый адресом p головы списка.
+list_empty(p) - Проверяет, пуст ли список, задаваемый адресом p головы списка.
 (Daniel P. Bovet and Marco Cesati "Understanding the LINUX KERNEL THIRD EDITION")
 */
 static inline int list_empty(const struct list_head *head)                           // https://elixir.bootlin.com/linux/v6.11/source/include/linux/list.h#L371
