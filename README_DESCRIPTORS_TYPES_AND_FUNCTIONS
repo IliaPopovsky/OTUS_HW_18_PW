@@ -1915,6 +1915,33 @@ put_eq:
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
+static void dd_exit_sched(struct elevator_queue *e)
+{
+	struct deadline_data *dd = e->elevator_data;
+	enum dd_prio prio;
+
+	for (prio = 0; prio <= DD_PRIO_MAX; prio++) {
+		struct dd_per_prio *per_prio = &dd->per_prio[prio];
+		const struct io_stats_per_prio *stats = &per_prio->stats;
+		uint32_t queued;
+
+		WARN_ON_ONCE(!list_empty(&per_prio->fifo_list[DD_READ]));
+		WARN_ON_ONCE(!list_empty(&per_prio->fifo_list[DD_WRITE]));
+
+		spin_lock(&dd->lock);
+		queued = dd_queued(dd, prio);
+		spin_unlock(&dd->lock);
+
+		WARN_ONCE(queued != 0,
+			  "statistics for priority %d: i %u m %u d %u c %u\n",
+			  prio, stats->inserted, stats->merged,
+			  stats->dispatched, atomic_read(&stats->completed));
+	}
+
+	kfree(dd);
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
 struct kobject {
 	const char		*name;
 	struct list_head	entry;
