@@ -1795,6 +1795,47 @@ static void bfq_exit_queue(struct elevator_queue *e)                            
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
+static bool bfq_bio_merge(struct request_queue *q, struct bio *bio,                      // https://elixir.bootlin.com/linux/v6.11/source/block/bfq-iosched.c#L2445
+		unsigned int nr_segs)
+{
+	struct bfq_data *bfqd = q->elevator->elevator_data;
+	struct request *free = NULL;
+	/*
+	 * bfq_bic_lookup grabs the queue_lock: invoke it now and
+	 * store its return value for later use, to avoid nesting
+	 * queue_lock inside the bfqd->lock. We assume that the bic
+	 * returned by bfq_bic_lookup does not go away before
+	 * bfqd->lock is taken.
+	 */
+	struct bfq_io_cq *bic = bfq_bic_lookup(q);
+	bool ret;
+
+	spin_lock_irq(&bfqd->lock);
+
+	if (bic) {
+		/*
+		 * Make sure cgroup info is uptodate for current process before
+		 * considering the merge.
+		 */
+		bfq_bic_update_cgroup(bic, bio);
+
+		bfqd->bio_bfqq = bic_to_bfqq(bic, op_is_sync(bio->bi_opf),
+					     bfq_actuator_index(bfqd, bio));
+	} else {
+		bfqd->bio_bfqq = NULL;
+	}
+	bfqd->bio_bic = bic;
+
+	ret = blk_mq_sched_try_merge(q, bio, nr_segs, &free);
+
+	spin_unlock_irq(&bfqd->lock);
+	if (free)
+		blk_mq_free_request(free);
+
+	return ret;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
 static struct elevator_type mq_deadline = {                                        // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L1077
 	.ops = {
 		.depth_updated		= dd_depth_updated,
@@ -1915,7 +1956,7 @@ put_eq:
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
-static void dd_exit_sched(struct elevator_queue *e)
+static void dd_exit_sched(struct elevator_queue *e)                                      // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L542
 {
 	struct deadline_data *dd = e->elevator_data;
 	enum dd_prio prio;
@@ -1939,6 +1980,32 @@ static void dd_exit_sched(struct elevator_queue *e)
 	}
 
 	kfree(dd);
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+/*
+ * Attempt to merge a bio into an existing request. This function is called
+ * before @bio is associated with a request.
+ */
+/*
+* Попытка добавить биографию в существующий запрос. Эта функция вызывается
+* до того, как @bio будет связан с запросом.
+*/
+static bool dd_bio_merge(struct request_queue *q, struct bio *bio,                  // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L653
+		unsigned int nr_segs)
+{
+	struct deadline_data *dd = q->elevator->elevator_data;
+	struct request *free = NULL;
+	bool ret;
+
+	spin_lock(&dd->lock);
+	ret = blk_mq_sched_try_merge(q, bio, nr_segs, &free);
+	spin_unlock(&dd->lock);
+
+	if (free)
+		blk_mq_free_request(free);
+
+	return ret;
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
