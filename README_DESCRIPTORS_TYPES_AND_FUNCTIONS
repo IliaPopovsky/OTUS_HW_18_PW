@@ -2009,6 +2009,32 @@ static bool dd_bio_merge(struct request_queue *q, struct bio *bio,              
 }
 
 ----------------------------------------------------------------------------------------------------------------------------------------------------------
+/* Callback from inside blk_mq_rq_ctx_init(). */     /* Обратный вызов изнутри blk_mq_rq_ctx_init(). */
+static void dd_prepare_request(struct request *rq)                                  // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L746
+{
+	rq->elv.priv[0] = NULL;
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+/* Callback from inside blk_mq_free_request(). */     /* Обратный вызов изнутри blk_mq_free_request(). */
+static void dd_finish_request(struct request *rq)                                  // https://elixir.bootlin.com/linux/v6.11/source/block/mq-deadline.c#L746
+{
+	struct request_queue *q = rq->q;
+	struct deadline_data *dd = q->elevator->elevator_data;
+	const u8 ioprio_class = dd_rq_ioclass(rq);
+	const enum dd_prio prio = ioprio_class_to_prio[ioprio_class];
+	struct dd_per_prio *per_prio = &dd->per_prio[prio];
+
+	/*
+	 * The block layer core may call dd_finish_request() without having
+	 * called dd_insert_requests(). Skip requests that bypassed I/O
+	 * scheduling. See also blk_mq_request_bypass_insert().
+	 */
+	if (rq->elv.priv[0])
+		atomic_inc(&per_prio->stats.completed);
+}
+
+----------------------------------------------------------------------------------------------------------------------------------------------------------
 struct kobject {
 	const char		*name;
 	struct list_head	entry;
